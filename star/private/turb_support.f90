@@ -194,6 +194,8 @@ contains
       character (len=256) :: message        
       logical ::  test_partials, using_TDC
       logical, parameter :: report = .false.
+      real(dp):: k0, R0, A, u_tilda, k_tilda, uB_tilda, kB_tilda
+      real(dp):: tiny = 1d-12
       include 'formats'
 
       ! Pre-calculate some things. 
@@ -303,6 +305,50 @@ contains
             if (s% report_ierr) write(*,*) 'ierr from set_MLT'
             return
          end if
+
+         ! added by PA: modifications to MLT by Bessila et al. due to rotation or magnetic field
+         
+         if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny)) then
+            !Convective wavenumber without rotation
+            k0 = 2*pi/Lambda% val
+            ! s% x_logical_ctrl(1) sets whether to use rot mlt or not
+            if (s% x_logical_ctrl(1) .and. s% rotation_flag .and. (s% omega(k) > tiny)) then
+               !rossby number
+               R0 = conv_vel% val * k0/ (2* s% omega(k))
+               call rotating_MLT(R0,u_tilda, k_tilda)
+               s% xtra1_array(k) = u_tilda
+               s% xtra2_array(k) = k_tilda
+               s% xtra3_array(k) = R0
+               Lambda = 2*pi/(k_tilda*k0)
+               ! print*, 'mod due to rot', conv_vel% val* u_tilda, lambda% val
+
+            endif
+            ! s% x_logical_ctrl(2) sets whether to use rot mlt or not
+            if (s% x_logical_ctrl(2) .and. s% x_ctrl(1)>0) then  !mag_mlt_flag
+               ! inverse alfven number 
+               A = s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
+               call magnetic_MLT(A, uB_tilda, kB_tilda)
+               s% xtra4_array(k) = uB_tilda
+               s% xtra5_array(k) = kB_tilda
+               s% xtra6_array(k) = A
+               Lambda = 2*pi/(kB_tilda*k0)
+               ! print*, 'mod due to mag', conv_vel% val* uB_tilda, lambda% val
+            end if
+
+            ! Re-Initialize no mixing
+            mixing_type = no_mixing
+            gradT = gradr
+            Y_face = gradT - gradL
+            conv_vel = 0d0
+            D = 0d0
+            Gamma = 0d0  
+
+            call set_MLT(MLT_option, mixing_length_alpha, s% Henyey_MLT_nu_param, s% Henyey_MLT_y_param, &
+                        chiT, chiRho, Cp, grav, Lambda, rho, P, T, opacity, &
+                        gradr, grada, gradL, &
+                        Gamma, gradT, Y_face, conv_vel, D, mixing_type, ierr)
+            ! print*, 'aftre', conv_vel% val, lambda% val,k
+         endif
 
          ! Experimental method to lower superadiabaticity. Call MLT again with an artificially reduced
          ! gradr if the resulting gradT would lead to the radiative luminosity approaching the Eddington
@@ -422,6 +468,100 @@ contains
             gradr_scaled = grad_scale*gradr
          end if
       end
+
+      subroutine rotating_MLT(R0,u_tilda, k_tilda)
+         real(dp), intent(in) :: R0
+         real(dp), intent(out) :: u_tilda, k_tilda
+         real(dp) :: var_s, c, z, z0, sqrt_z
+
+         var_s = 0.5707277056455107       !s = 2**(1/3)* 3**(1/2) * 5**(-5/6)
+         c = 18/(25*pi*pi*R0*R0*var_s*var_s)      ! value at pole
+         z0 = 1.357208808297453     !(2/5)**(-1/3)
+
+         ! Call Newton's method
+         z = newton_for_rot(c, z0)
+         if (z>0.d0) then
+            sqrt_z = sqrt(z)
+            u_tilda = 2.041241452319315* var_s/sqrt_z
+            k_tilda = 0.6324555320336759*(sqrt_z**3)  
+         endif
+        
+      end subroutine
+
+      ! Newton's method for root finding
+      real(dp) function newton_for_rot(c, initial_guess)
+         real(dp), intent(in) :: c, initial_guess
+         integer, parameter :: max_iter = 1000
+         real(dp), parameter :: tol = 1.0d-6
+         real(dp) :: z, z_new, f, f_prime
+         integer :: i
+
+         z = initial_guess
+
+         do i = 1, max_iter
+            ! Function to compute f(z) - Eq. 46 from Augustson & Mathis (2019)
+            f = 2.0d0*z**5 - 5.0d0*z**2 - c
+            ! Function to compute the derivative
+            f_prime = 10.0d0*z**4 - 10.0d0*z
+
+               z_new = z - f / f_prime
+               if (abs(z_new - z) < tol) then
+                  newton_for_rot = z_new
+                  return
+               end if
+               z = z_new
+         end do
+
+         print *, "Newton's method did not converge.", z, initial_guess,c
+         !assigning error value
+         newton_for_rot = -1.d0
+         stop 0
+      end function 
+        
+      subroutine magnetic_MLT(A, uB_tilda, kB_tilda)
+         real(dp), intent(in):: A
+         real(dp), intent(out):: uB_tilda, kB_tilda
+         real(dp) :: a_coeff(0:12), b_coeff(0:12)
+
+         data a_coeff / &
+               -0.044392,-0.2024458,-0.50495295,-0.86858972,-0.2781712,&
+               1.93787186,1.41369458,-2.85725104,-1.58044849,2.47665911,&
+               0.43025852,-0.92325736, 0.16332385  /
+
+         data b_coeff / &
+               0.0135241,0.06572427,0.17654007,0.45234062,0.83321596,&
+               0.03682934,-2.03805955,-0.97659755,2.56699548,1.1755226,&
+               -1.75581928,-0.45128656,0.51279656 /
+
+         if (A<0.1222) then
+            uB_tilda = 1
+            kB_tilda = 1
+         elseif (A>=0.1222 .and. A<=14.61) then
+            uB_tilda = power_series(a_coeff,log10(A))
+            uB_tilda  = 10**(uB_tilda)
+
+            kB_tilda = power_series(b_coeff,log10(A))
+            kB_tilda = 10**(kB_tilda)
+         elseif(A>14.61)then
+            uB_tilda = 0.1624-1.000321*log10(A)
+            uB_tilda = 10**(uB_tilda)
+
+            kB_tilda = -0.3885+ 0.99744* log10(A)
+            kB_tilda = 10**(kB_tilda)
+         endif
+      end subroutine
+
+      real(dp) function power_series(y,x)
+         real(dp), intent(in) :: y(0:12), x
+         real(dp) :: sum
+         integer  :: i
+         sum = y(0)
+         do i = 1, 12
+            sum = sum + (y(i)*(x**i))
+         end do
+         power_series = sum
+
+      end function
    end subroutine Get_results
 
 
