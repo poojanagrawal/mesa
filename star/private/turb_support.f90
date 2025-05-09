@@ -307,14 +307,14 @@ contains
          end if
 
          ! added by PA: modifications to MLT by Bessila et al. due to rotation or magnetic field
-         
+
          ! check for convective mixing
-         if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny).and.(k>0)) then
+         if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny) &
+               .and. (trim(s% x_character_ctrl(1))/='') .and.(k>0)) then
             u_tilda = 1.d0
             k_tilda = 1.d0
-            !print*, 'I am here'
-            ! s% x_logical_ctrl(1) sets whether to use modifications to mlt for rotation
-            if (s% x_logical_ctrl(1)) then
+            ! use modifications to mlt for rotation
+            if (trim(s% x_character_ctrl(1))=='rotation') then
                !check for rotation
                if (s% rotation_flag .and. (s% omega(k) > tiny)) then
                   !Convective rossby number 
@@ -322,8 +322,8 @@ contains
                   call rotating_MLT(R0, u_tilda, k_tilda)
                   s% xtra3_array(k) = R0         
                endif
-            ! s% x_logical_ctrl(2) sets whether to use modifications to mlt for B field
-            elseif (s% x_logical_ctrl(2)) then  
+            ! use modifications to mlt for B field
+            elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
                if (s% rotation_flag) then
                   ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
                   ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
@@ -337,6 +337,10 @@ contains
                endif
                s% xtra3_array(k) = A
                call magnetic_MLT(A, u_tilda, k_tilda)
+            else
+               print*, 'invalid vaue for x_character_ctrl(1)'
+               print*, 'choose between rotation and magnetic_field'
+               STOP
             end if
 
             s% xtra1_array(k) = u_tilda
