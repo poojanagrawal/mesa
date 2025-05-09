@@ -194,7 +194,7 @@ contains
       character (len=256) :: message        
       logical ::  test_partials, using_TDC
       logical, parameter :: report = .false.
-      real(dp):: k0, R0, A, u_tilda, k_tilda, uB_tilda, kB_tilda
+      real(dp):: R0, A, u_tilda, k_tilda
       real(dp):: tiny = 1d-12
       include 'formats'
 
@@ -308,33 +308,42 @@ contains
 
          ! added by PA: modifications to MLT by Bessila et al. due to rotation or magnetic field
          
-         if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny)) then
-            !Convective wavenumber without rotation
-            k0 = 2*pi/Lambda% val
-            ! s% x_logical_ctrl(1) sets whether to use rot mlt or not
-            if (s% x_logical_ctrl(1) .and. s% rotation_flag .and. (s% omega(k) > tiny)) then
-               !rossby number
-               R0 = conv_vel% val * k0/ (2* s% omega(k))
-               call rotating_MLT(R0,u_tilda, k_tilda)
-               s% xtra1_array(k) = u_tilda
-               s% xtra2_array(k) = k_tilda
-               s% xtra3_array(k) = R0
-               Lambda = 2*pi/(k_tilda*k0)
-               ! print*, 'mod due to rot', conv_vel% val* u_tilda, lambda% val
+         ! check for convective mixing
+         if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny).and.(k>0)) then
+            u_tilda = 1.d0
+            k_tilda = 1.d0
+            !print*, 'I am here'
+            ! s% x_logical_ctrl(1) sets whether to use modifications to mlt for rotation
+            if (s% x_logical_ctrl(1)) then
+               !check for rotation
+               if (s% rotation_flag .and. (s% omega(k) > tiny)) then
+                  !Convective rossby number 
+                  R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)
+                  call rotating_MLT(R0, u_tilda, k_tilda)
+                  s% xtra3_array(k) = R0         
+               endif
+            ! s% x_logical_ctrl(2) sets whether to use modifications to mlt for B field
+            elseif (s% x_logical_ctrl(2)) then  
+               if (s% rotation_flag) then
+                  ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
+                  ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
+                  ! inverse alfven number when B is given by magnetostrophy 
+                  ! https://doi.org/10.1051/0004-6361/201936477
 
-            endif
-            ! s% x_logical_ctrl(2) sets whether to use rot mlt or not
-            if (s% x_logical_ctrl(2) .and. s% x_ctrl(1)>0) then  !mag_mlt_flag
-               ! inverse alfven number 
-               A = s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
-               call magnetic_MLT(A, uB_tilda, kB_tilda)
-               s% xtra4_array(k) = uB_tilda
-               s% xtra5_array(k) = kB_tilda
-               s% xtra6_array(k) = A
-               Lambda = 2*pi/(kB_tilda*k0)
-               ! print*, 'mod due to mag', conv_vel% val* uB_tilda, lambda% val
+                  A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
+               else
+                  ! inverse alfven number 
+                  A = s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
+               endif
+               s% xtra3_array(k) = A
+               call magnetic_MLT(A, u_tilda, k_tilda)
             end if
 
+            s% xtra1_array(k) = u_tilda
+            s% xtra2_array(k) = k_tilda
+            s% xtra4_array(k) = conv_vel% val* u_tilda 
+            Lambda = Lambda% val/k_tilda
+            
             ! Re-Initialize no mixing
             mixing_type = no_mixing
             gradT = gradr
@@ -347,7 +356,23 @@ contains
                         chiT, chiRho, Cp, grav, Lambda, rho, P, T, opacity, &
                         gradr, grada, gradL, &
                         Gamma, gradT, Y_face, conv_vel, D, mixing_type, ierr)
-            ! print*, 'aftre', conv_vel% val, lambda% val,k
+
+
+            ! conv vel from mod MLT
+            ! conv_vel = conv_vel0 * u_tilda
+            ! D = conv_vel% val *Lambda% val/3d0    ! diffusion coefficient [cm^2/sec]
+            ! if (conv_vel% val > 0d0) then
+            !    mixing_type = convective_mixing
+            ! else
+            !    mixing_type = no_mixing
+            ! end if
+
+            ! Unpack output
+            !! @param Y_face The superadiabaticity (dlnT/dlnP - grada, output).
+
+            ! gradT = Y_face + gradL
+            ! D = conv_vel*scale_height*mixing_length_alpha/3d0     ! diffusion coefficient [cm^2/sec]
+            
          endif
 
          ! Experimental method to lower superadiabaticity. Call MLT again with an artificially reduced
