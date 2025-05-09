@@ -2,38 +2,62 @@
 !
 !   Copyright (C) 2015-2019  The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
 
       module remove_shells
 
       use star_private_def
-      use const_def
+      use const_def, only: dp, pi4, ln10, boltz_sigma, avo, kerg, msun
       use utils_lib
 
       implicit none
 
+      private
+      public :: do_remove_center_at_cell_k
+      public :: do_remove_center_by_temperature
+      public :: do_remove_center_by_radius_cm
+      public :: do_remove_inner_fraction_q
+      public :: do_remove_center_by_he4
+      public :: do_remove_center_by_c12_o16
+      public :: do_remove_center_by_si28
+      public :: do_remove_center_to_reduce_co56_ni56
+      public :: do_remove_center_by_ye
+      public :: do_remove_center_by_entropy
+      public :: do_remove_center_by_infall_kms
+      public :: do_remove_center_at_inner_max_abs_v
+      public :: do_remove_center_by_mass_gm
+      public :: do_remove_fe_core
+      public :: do_zero_inner_v_by_mass_gm
+      public :: do_relax_to_star_cut
+      public :: do_remove_surface_by_v_surf_km_s
+      public :: do_remove_surface_by_v_surf_div_cs
+      public :: do_remove_surface_by_v_surf_div_v_escape
+      public :: do_remove_surface_at_cell_k
+      public :: do_remove_surface_at_he_core_boundary
+      public :: do_remove_surface_by_optical_depth
+      public :: do_remove_surface_by_density
+      public :: do_remove_surface_by_pressure
+      public :: do_remove_surface_by_radius_cm
+      public :: do_remove_surface_by_q
+      public :: do_remove_surface_by_mass_gm
+      public :: do_limit_center_logp
+      public :: do_remove_center_by_logrho
+      public :: do_remove_fallback
 
       contains
-
 
       subroutine do_remove_center_at_cell_k(id, k, ierr)
          integer, intent(in) :: id, k
@@ -166,7 +190,7 @@
          integer, intent(out) :: ierr
          type (star_info), pointer :: s
          integer :: j, jj, k, species, nz, co56, ni56
-         real(dp) :: mtotal, dm56, alfa_co56, dm56_new, dm56_old, x56_new, x56_old, xsum
+         real(dp) :: mtotal, dm56, alfa_co56, dm56_new, dm56_old, x56_new, x56_old
          include 'formats'
          call get_star_ptr(id, s, ierr)
          if (ierr /= 0) then
@@ -192,13 +216,13 @@
                else
                   call do_remove_inner_fraction_q(id, s% q(k), ierr)
                end if
-               if (ierr == 0) then ! adjust ni+co in center zone
+               if (ierr == 0) then  ! adjust ni+co in center zone
                   nz = s% nz
                   mtotal = dot_product(s% dm(1:nz), &
                      s% xa(co56,1:nz) + s% xa(ni56,1:nz))/Msun
                   write(*,1) 'mtotal after remove', mtotal
                   write(*,2) 'nz after remove', nz
-                  dm56 = x - mtotal ! change Ni+Co in nz by this much
+                  dm56 = x - mtotal  ! change Ni+Co in nz by this much
                   x56_old = s% xa(co56,nz) + s% xa(ni56,nz)
                   dm56_old = s% dm(nz)*x56_old/Msun
                   if (x56_old <= 0d0) then
@@ -217,11 +241,11 @@
                   do jj=2,species
                      if (s% xa(jj,nz) > s% xa(j,nz)) j = jj
                   end do
-                  
+
                   s% xa(co56,nz) = x56_new*alfa_co56
                   s% xa(ni56,nz) = x56_new*(1d0 - alfa_co56)
                   s% xa(j,nz) = s% xa(j,nz) - (x56_new - x56_old)
-                  
+
                   write(*,1) 'new s% xa(co56,nz)', s% xa(co56,nz)
                   write(*,1) 'new s% xa(ni56,nz)', s% xa(ni56,nz)
                   mtotal = dot_product(s% dm(1:nz), &
@@ -245,19 +269,19 @@
          integer, intent(in) :: id
          integer, intent(out) :: ierr
          type (star_info), pointer :: s
-         integer :: k, k0, k1, nz
+         integer :: k, k0, nz
          real(dp) :: ie, ke, pe, rR, rL, rC, m_cntr, &
             sum_total_energy, speed_limit
          real(dp), pointer :: v(:)
-         
+
          include 'formats'
-         
+
          call get_star_ptr(id, s, ierr)
          if (ierr /= 0) then
             write(*,*) 'do_remove_fallback: get_star_ptr ierr', ierr
             return
          end if
-         
+
          if (s% u_flag) then
             v => s% u
          else if (s% v_flag) then
@@ -265,19 +289,19 @@
          else
             return
          end if
-         
+
          nz = s% nz
-         
+
          ! check to see how far extend fallback above innermost cell
          k0 = nz
-         if (s% job% fallback_check_total_energy) then ! remove_bound_inner_region
+         if (s% job% fallback_check_total_energy) then  ! remove_bound_inner_region
             ! integrate total energy outward looking for sign going negative.
             ! if find, then continue until reach minimum integral and cut there.
             sum_total_energy = 0d0
             do k = nz,1,-1
                ie = s% energy(k)*s% dm(k)
                ke = 0.5d0*v(k)*v(k)*s% dm(k)
-               if (k == s% nz) then   
+               if (k == s% nz) then
                   rL = s% R_center
                else
                   rL = s% r(k+1)
@@ -306,7 +330,7 @@
             end do
             if (sum_total_energy >= 0d0) then
                !write(*,1) 'no bound inner region', sum_total_energy
-               return ! no bound inner region
+               return  ! no bound inner region
             end if
             do k=k0-1,1,-1
                ie = s% energy(k)*s% dm(k)
@@ -316,7 +340,7 @@
                rC = 0.5d0*(rR + rL)
                m_cntr = s% m(k) - 0.5d0*s% dm(k)
                pe = -s% cgrav(k)*m_cntr*s% dm(k)/rC
-               if (ie + ke + pe > 0d0) then ! now back to unbound cell
+               if (ie + ke + pe > 0d0) then  ! now back to unbound cell
                   k0 = k+1
                   !write(*,2) 'top', k0, ie + ke + pe
                   exit
@@ -330,11 +354,11 @@
                if (-v(k) < speed_limit*s% csound(k)) exit
             end do
          end if
-         
+
          !call mesa_error(__FILE__,__LINE__,'do_remove_fallback')
-         
+
          !write(*,3) 'k0 old nz', k0, s% nz, s% m(k0)/Msun
-         
+
          ! remove cells k0..nz
          call do_remove_inner_fraction_q(id, s% q(k0), ierr)
 
@@ -351,13 +375,13 @@
          integer :: k, k0
          real(dp) :: lnd_limit
          include 'formats'
-         
+
          call get_star_ptr(id, s, ierr)
          if (ierr /= 0) then
             write(*,*) 'do_remove_center_by_logRho: get_star_ptr ierr', ierr
             return
          end if
-         
+
          lnd_limit = logRho_limit*ln10
          k0 = 0
          do k = s% nz,1,-1
@@ -367,10 +391,10 @@
             end if
             if (s% q(k) > 0.01d0) return
          end do
-         
+
          ! k0 is innermost cell with density below limit
          ! search out from there for outermost with density too low
-         
+
          do k = k0,1,-1
             if (s% lnd(k) < lnd_limit) cycle
             call do_remove_inner_fraction_q(id, s% q(k), ierr)
@@ -385,14 +409,14 @@
          real(dp), intent(in) :: logP_limit
          integer, intent(out) :: ierr
          type (star_info), pointer :: s
-         integer :: k, k0
+         integer :: k
          real(dp) :: lnP_limit
          include 'formats'
          call get_star_ptr(id, s, ierr)
          if (ierr /= 0) then
             write(*,*) 'do_limit_center_logP: get_star_ptr ierr', ierr
             return
-         end if         
+         end if
          lnP_limit = logP_limit*ln10
          k = s% nz
          if (s% lnPeos(k) > lnP_limit) then
@@ -471,10 +495,10 @@
                ierr = -1
                return
             end if
-            if (v > v_infall) exit ! not falling fast enough
+            if (v > v_infall) exit  ! not falling fast enough
             k_infall = k
          end do
-         if (k_infall == 0) return ! no infall
+         if (k_infall == 0) return  ! no infall
          call do_remove_inner_fraction_q(id, s% q(k_infall), ierr)
          write(*,1) 'new inner boundary mass', s% m_center/Msun
       end subroutine do_remove_center_by_infall_kms
@@ -554,7 +578,6 @@
          integer, intent(in) :: id
          integer, intent(out) :: ierr
          type (star_info), pointer :: s
-         integer :: k
          call get_star_ptr(id, s, ierr)
          if (ierr /= 0) then
             write(*,*) 'do_remove_fe_core: get_star_ptr ierr', ierr
@@ -665,7 +688,7 @@
          end if
          call set_qs(s, s% nz, s% q, s% dq, ierr)
          if (ierr /= 0) return
-         s% generations = 1 ! memory leak, but hopefully not necessary to fix
+         s% generations = 1  ! memory leak, but hopefully not necessary to fix
             ! assuming remove center is a rare operation
          call prune_star_info_arrays(s, ierr)
          if (ierr /= 0) return
@@ -784,7 +807,7 @@
          end if
          v_max = 1d5*v_surf_km_s
          if (v(1) < v_max) return
-         do k=2,3 ! s% nz
+         do k=2,3  ! s% nz
             if (v(k) < v_max) exit
             write(*,2) 'v', k-1, v(k-1)/1d5, v_surf_km_s
          end do
@@ -816,7 +839,7 @@
          end if
          !write(*,1) 'v(1)/cs', v(1)/s% csound(1), v_surf_div_cs
          if (v(1) < s% csound(1)*v_surf_div_cs) return
-         do k=2,30 ! s% nz
+         do k=2,30  ! s% nz
             if (v(k) < s% csound(k)*v_surf_div_cs) exit
             write(*,2) 'v/cs', k-1, v(k-1)/s% csound(k-1)
          end do
@@ -833,7 +856,7 @@
          integer, intent(out) :: ierr
          type (star_info), pointer :: s
          integer :: k, k_vesc
-         real(dp) :: vesc, vesc_m1
+         real(dp) :: vesc
          real(dp), dimension(:), pointer :: v
          include 'formats'
          call get_star_ptr(id, s, ierr)
@@ -888,8 +911,6 @@
          real(dp), intent(in) :: density
          integer, intent(out) :: ierr
          type (star_info), pointer :: s
-         integer :: k
-         real(dp) :: avg_rho
          ierr = 0
          include 'formats'
          call get_star_ptr(id, s, ierr)
@@ -1005,7 +1026,7 @@
                write(*,*) 'remove surface currently requires model with inner boundary at true center of star'
                ierr = -1
                call mesa_error(__FILE__,__LINE__,'do_remove_surface')
-            end if         
+            end if
             call do_relax_to_star_cut( &
                id, surface_k, s% job% remove_surface_do_jrot, &
                s% job% remove_surface_do_entropy, &
@@ -1043,7 +1064,7 @@
             c = prv
          end if
 
-         prv = s ! this makes copies of pointers and scalars
+         prv = s  ! this makes copies of pointers and scalars
 
          nz = nz_old - skip
          s% nz = nz
@@ -1124,9 +1145,9 @@
 
          if (dbg) write(*,1) 'do_remove_surface tau_factor, Tsurf_factor', &
             s% tau_factor, s% Tsurf_factor
-            
+
          if (dbg) call mesa_error(__FILE__,__LINE__,'do_remove_surface')
-            
+
       end subroutine do_remove_surface
 
 
@@ -1138,7 +1159,7 @@
          use interp_1d_def, only: pm_work_size
          use interp_1d_lib, only: interp_pm, interp_values, interp_value
          use adjust_xyz, only: change_net
-         use set_flags, only: set_v_flag, set_u_flag, set_rotation_flag
+         use set_flags, only: set_v_flag, set_u_flag, set_RTI_flag, set_rotation_flag
          use rotation_mix_info, only: set_rotation_mixing_info
          use hydro_rotation, only: set_i_rot, set_rotation_info
          use relax, only: do_relax_composition, do_relax_angular_momentum, do_relax_entropy
@@ -1146,11 +1167,11 @@
 
          integer, intent(in) :: id, k_remove
          logical, intent(in) :: do_jrot, do_entropy
-         logical, intent(in) :: turn_off_energy_sources_and_sinks 
+         logical, intent(in) :: turn_off_energy_sources_and_sinks
             ! determines if we turn off non_nuc_neu and eps_nuc for entropy relax
          integer, intent(out) :: ierr
 
-         logical :: v_flag, u_flag, rotation_flag
+         logical :: v_flag, u_flag, RTI_flag, rotation_flag
          type (star_info), pointer :: s
          character (len=net_name_len) :: net_name
          integer :: model_number, num_trace_history_values, photo_interval
@@ -1158,12 +1179,11 @@
             initial_z, initial_y, initial_mass, &
             cumulative_energy_error, cumulative_extra_heating
 
-         real(dp), pointer :: interp_work(:), conv_vel_interp(:)
          real(dp), pointer :: q(:), xq(:), xa(:,:), j_rot(:), entropy(:)
-         real(dp) :: conv_vel_temp, time
-         integer :: num_pts, k, k0, species
+         real(dp) :: time
+         integer :: num_pts, k0, species
          logical :: save_have_mlt_vc
-         logical :: dbg = .false.
+         logical, parameter :: dbg = .false.
 
          ierr = 0
          call get_star_ptr(id, s, ierr)
@@ -1240,11 +1260,19 @@
             if (dbg) write(*,*) "set_v_flag ierr", ierr
             v_flag = .true.
          end if
+
          u_flag = .false.
          if (s% u_flag) then
             call set_u_flag(id, .false., ierr)
             if (dbg) write(*,*) "set_u_flag ierr", ierr
             u_flag = .true.
+         end if
+
+         RTI_flag = .false.
+         if (s% RTI_flag) then
+            call set_RTI_flag(id, .false., ierr)
+            if (dbg) write(*,*) "set_RTI_flag ierr", ierr
+            RTI_flag = .true.
          end if
 
          if (s% rotation_flag) then
@@ -1272,7 +1300,7 @@
 
          s% prev_mesh_nz = 0
 
-         call change_net(id, .true., 'basic.net', ierr) ! TODO:need to allow specification of different net
+         call change_net(id, .true., 'basic.net', ierr)  ! TODO:need to allow specification of different net
          if (dbg) write(*,*) "check change_net ierr", ierr
          if (ierr /= 0) return
          call load_zams_model(id, ierr)
@@ -1370,10 +1398,9 @@
          s% photo_interval = photo_interval
 
          deallocate(q, xq)
-         
+
          s% need_to_setvars = .true.
 
       end subroutine do_relax_to_star_cut
-
 
       end module remove_shells

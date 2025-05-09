@@ -2,36 +2,30 @@
 !
 !   Copyright (C) 2010-2019  The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
 
       module read_model
 
       use star_private_def
-      use const_def
+      use const_def, only: dp, msun, secyer
 
       implicit none
 
       integer, parameter :: bit_for_zams_file = 0
-      integer, parameter :: bit_for_lnPgas = 1 ! OBSOLETE: includes lnPgas variables in place of lnd
+      integer, parameter :: bit_for_lnPgas = 1  ! OBSOLETE: includes lnPgas variables in place of lnd
       integer, parameter :: bit_for_2models = 2
       integer, parameter :: bit_for_velocity = 3
       integer, parameter :: bit_for_rotation = 4
@@ -56,7 +50,7 @@
       integer, parameter :: increment_for_RTI_flag = 1
       integer, parameter :: increment_for_RSP_flag = 3
       integer, parameter :: increment_for_RSP2_flag = 1
-      
+
       integer, parameter :: max_increment = increment_for_rotation_flag &
                                           + increment_for_have_j_rot &
                                           + increment_for_have_mlt_vc &
@@ -70,9 +64,7 @@
 
       character (len=100000) :: buf
 
-
       contains
-
 
       subroutine finish_load_model(s, restart, ierr)
          use hydro_vars, only: set_vars
@@ -88,12 +80,11 @@
          type (star_info), pointer :: s
          logical, intent(in) :: restart
          integer, intent(out) :: ierr
-         integer :: k, i, j,  nz
-         real(dp) :: u00, um1, xm, total_radiation
+         integer :: k, nz
          include 'formats'
          ierr = 0
          nz = s% nz
-         s% brunt_B(1:nz) = 0 ! temporary proxy for brunt_B
+         s% brunt_B(1:nz) = 0  ! temporary proxy for brunt_B
          call set_qs(s, nz, s% q, s% dq, ierr)
          if (ierr /= 0) then
             write(*,*) 'set_qs failed in finish_load_model'
@@ -101,8 +92,8 @@
          end if
          call set_m_and_dm(s)
          call set_m_grav_and_grav(s)
-         call set_dm_bar(s, nz, s% dm, s% dm_bar)   
-                  
+         call set_dm_bar(s, nz, s% dm, s% dm_bar)
+
          call reset_epsnuc_vectors(s)
 
          s% star_mass = s% mstar/msun
@@ -150,7 +141,10 @@
             call fill_ad_with_zeros(s% u_face_ad,1,-1)
             call fill_ad_with_zeros(s% P_face_ad,1,-1)
          end if
-         
+
+         s% flux_limit_R(1:nz) = 0
+         s% flux_limit_lambda(1:nz) = 0
+
          if (s% RSP_flag) then
             call RSP_setup_part1(s, restart, ierr)
             if (ierr /= 0) then
@@ -162,8 +156,8 @@
          if (.not. s% have_mlt_vc) then
             s% okay_to_set_mlt_vc = .true.
          end if
-         
-         s% doing_finish_load_model = .true.  
+
+         s% doing_finish_load_model = .true.
          call set_vars(s, s% dt, ierr)
          if (ierr == 0 .and. s% RSP2_flag) call set_RSP2_vars(s,ierr)
          s% doing_finish_load_model = .false.
@@ -218,15 +212,15 @@
          character (len=*), intent(in) :: filename
          integer, intent(out) :: ierr
 
-         integer :: iounit, n, i, k, t, file_type, &
+         integer :: iounit, n, i, t, file_type, &
             year_month_day_when_created, nz, species, nvar, count
          logical :: do_read_prev, no_L
          real(dp) :: initial_mass, initial_z, initial_y, &
             tau_factor, Tsurf_factor, opacity_factor, mixing_length_alpha
-         character (len=strlen) :: buffer, string, message
+         character (len=strlen) :: buffer, string
          character (len=net_name_len) :: net_name
-         character(len=iso_name_length), pointer :: names(:) ! (species)
-         integer, pointer :: perm(:) ! (species)
+         character(len=iso_name_length), pointer :: names(:)  ! (species)
+         integer, pointer :: perm(:)  ! (species)
 
          include 'formats'
 
@@ -256,7 +250,7 @@
             return
          end if
 
-         read(iounit, *, iostat=ierr) ! skip the blank line after the file type
+         read(iounit, *, iostat=ierr)  ! skip the blank line after the file type
          if (ierr /= 0) then
             return
          end if
@@ -273,7 +267,7 @@
          s% model_number = 0
          s% star_age = 0
          s% xmstar = -1
-         
+
          tau_factor = s% tau_factor
          Tsurf_factor = s% Tsurf_factor
          mixing_length_alpha = s% mixing_length_alpha
@@ -301,7 +295,7 @@
             write(*,*) 'species', species
             return
          end if
-         
+
          s% init_model_number = s% model_number
          s% time = s% star_age*secyer
 
@@ -341,7 +335,7 @@
             write(*,1) 'but current setting for mixing_length_alpha =', s% mixing_length_alpha
             write(*,'(A)')
          end if
-         
+
          s% v_flag = BTEST(file_type, bit_for_velocity)
          s% u_flag = BTEST(file_type, bit_for_u)
          s% rotation_flag = BTEST(file_type, bit_for_rotation)
@@ -353,7 +347,7 @@
          s% RSP_flag = BTEST(file_type, bit_for_RSP)
          s% RSP2_flag = BTEST(file_type, bit_for_RSP2)
          no_L = BTEST(file_type, bit_for_no_L_basic_variable)
-         
+
          if (BTEST(file_type, bit_for_lnPgas)) then
             write(*,'(A)')
             write(*,*) 'MESA no longer supports models using lnPgas as a structure variable'
@@ -385,7 +379,7 @@
                'do_read_saved_model failed in set_net for net_name = ' // trim(s% net_name)
             return
          end if
-         
+
          call set_var_info(s, ierr)
          if (ierr /= 0) then
             write(*,*) 'do_read_saved_model failed in set_var_info'
@@ -417,7 +411,7 @@
                count = count+1
                write(*,*) "Mod file has isotope ",trim(names(i)), " but that is not in the net"
             end if
-         end do 
+         end do
          if (count/=0) call mesa_error(__FILE__,__LINE__)
 
          nvar = s% nvar_total
@@ -469,20 +463,19 @@
          subroutine read_prev_properties
             character (len=132) :: line
             real(dp) :: tmp, skip_val
-            integer :: i
             include 'formats'
-            
+
             ierr = 0
             s% dt = -1
             s% mstar_old = -1
             s% dt_next = -1
             s% nz_old = -1
 
-            do ! until reach a blank line
+            do  ! until reach a blank line
                read(iounit, fmt='(a)', iostat=ierr) line
                if (ierr /= 0) return
 
-               if (len_trim(line) == 0) exit ! blank line
+               if (len_trim(line) == 0) exit  ! blank line
 
                if (match_keyword('previous n_shells', line, tmp)) then
                   s% nz_old = int(tmp)
@@ -540,7 +533,6 @@
             i_Et_RSP, i_erad_RSP, i_Fr_RSP, i_v, i_u, i_alpha_RTI, ii
          real(dp), target :: vec_ary(species + nvar_hydro + max_increment)
          real(dp), pointer :: vec(:)
-         real(dp) :: r00, rm1
          integer :: nvec
 
          include 'formats'
@@ -552,24 +544,24 @@
          i_lnT = s% i_lnT
          i_lnR = s% i_lnR
          i_lum = s% i_lum
-         i_w = s% i_w         
-         i_Hp = s% i_Hp         
+         i_w = s% i_w
+         i_Hp = s% i_Hp
          i_v = s% i_v
          i_u = s% i_u
          i_alpha_RTI = s% i_alpha_RTI
          i_Et_RSP = s% i_Et_RSP
          i_erad_RSP = s% i_erad_RSP
          i_Fr_RSP = s% i_Fr_RSP
-         
-         n = species + nvar_hydro + 1 ! + 1 is for dq
-         if (s% rotation_flag) n = n+increment_for_rotation_flag ! read omega
-         if (s% have_j_rot) n = n+increment_for_have_j_rot ! read j_rot
+
+         n = species + nvar_hydro + 1  ! + 1 is for dq
+         if (s% rotation_flag) n = n+increment_for_rotation_flag  ! read omega
+         if (s% have_j_rot) n = n+increment_for_have_j_rot  ! read j_rot
          if (s% have_mlt_vc) n = n+increment_for_have_mlt_vc
-         if (s% D_omega_flag) n = n+increment_for_D_omega_flag ! read D_omega
-         if (s% am_nu_rot_flag) n = n+increment_for_am_nu_rot_flag ! read am_nu_rot
-         if (s% RTI_flag) n = n+increment_for_RTI_flag ! read alpha_RTI
-         if (s% RSP_flag) n = n+increment_for_RSP_flag ! read RSP_et, erad, Fr
-         if (s% RSP2_flag) n = n+increment_for_RSP2_flag ! read w, Hp
+         if (s% D_omega_flag) n = n+increment_for_D_omega_flag  ! read D_omega
+         if (s% am_nu_rot_flag) n = n+increment_for_am_nu_rot_flag  ! read am_nu_rot
+         if (s% RTI_flag) n = n+increment_for_RTI_flag  ! read alpha_RTI
+         if (s% RSP_flag) n = n+increment_for_RSP_flag  ! read RSP_et, erad, Fr
+         if (s% RSP2_flag) n = n+increment_for_RSP2_flag  ! read w, Hp
 
 !$omp critical (read1_model_loop)
 ! make this a critical section to so don't have to dynamically allocate buf
@@ -598,15 +590,15 @@
             j = 1
             j=j+1; xh(i_lnd,k) = vec(j)
             j=j+1; xh(i_lnT,k) = vec(j)
-            j=j+1; xh(i_lnR,k) = vec(j)            
+            j=j+1; xh(i_lnR,k) = vec(j)
             if (s% RSP_flag) then
                j=j+1; xh(i_Et_RSP,k) = vec(j)
                j=j+1; xh(i_erad_RSP,k) = vec(j)
                j=j+1; xh(i_Fr_RSP,k) = vec(j)
-            else if (s% RSP2_flag) then 
+            else if (s% RSP2_flag) then
                j=j+1; xh(i_w,k) = vec(j)
                j=j+1; xh(i_Hp,k) = vec(j)
-            end if   
+            end if
             if (i_lum /= 0) then
                j=j+1; xh(i_lum,k) = vec(j)
             else
@@ -624,10 +616,10 @@
                j=j+1; j_rot(k) = vec(j)
             end if
             if (s% D_omega_flag) then
-               j=j+1; ! skip saving the file data
+               j=j+1;  ! skip saving the file data
             end if
             if (s% am_nu_rot_flag) then
-               j=j+1; ! skip saving the file data
+               j=j+1;  ! skip saving the file data
             end if
             if (s% u_flag) then
                j=j+1; xh(i_u,k) = vec(j)
@@ -657,10 +649,10 @@
             write(*,*) 'read1_model_loop failed'
             return
          end if
-         
+
          if (s% rotation_flag .and. .not. s% D_omega_flag) &
             s% D_omega(1:nz) = 0d0
-         
+
          if (s% rotation_flag .and. .not. s% am_nu_rot_flag) &
             s% am_nu_rot(1:nz) = 0d0
 
@@ -812,10 +804,10 @@
          character (len=132) :: line
          real(dp) :: tmp
          ierr = 0
-         do ! until reach a blank line
+         do  ! until reach a blank line
             read(iounit, fmt='(a)', iostat=ierr) line
             if (ierr /= 0) return
-            if (len_trim(line) == 0) return ! blank line
+            if (len_trim(line) == 0) return  ! blank line
             if (match_keyword_for_string('net_name', line, net_name)) then; cycle; end if
             if (match_keyword('species', line, tmp)) then; species = int(tmp); cycle; end if
             if (match_keyword('n_shells', line, tmp)) then; n_shells = int(tmp); cycle; end if
@@ -938,25 +930,25 @@
          n = len_trim(buffer)
          i = 0
          num_found = 0
-       token_loop: do ! have non-empty buffer
+       token_loop: do  ! have non-empty buffer
             i = i+1
             if (i > n) then
                write(*,*) 'get_chem_col_names: failed to find all of the names'
                ierr = -1
                return
             end if
-            if (buffer(i:i) == char(9)) cycle token_loop ! skip tabs
+            if (buffer(i:i) == char(9)) cycle token_loop  ! skip tabs
             select case(buffer(i:i))
                case (' ')
-                  cycle token_loop ! skip spaces
+                  cycle token_loop  ! skip spaces
                case default
                   j1 = i; j2 = i
                   name_loop: do
-                     if (i+1 > n) exit
-                     if (buffer(i+1:i+1) == ' ') exit
-                     if (buffer(i+1:i+1) == '(') exit
-                     if (buffer(i+1:i+1) == ')') exit
-                     if (buffer(i+1:i+1) == ',') exit
+                     if (i+1 > n) exit name_loop
+                     if (buffer(i+1:i+1) == ' ') exit name_loop
+                     if (buffer(i+1:i+1) == '(') exit name_loop
+                     if (buffer(i+1:i+1) == ')') exit name_loop
+                     if (buffer(i+1:i+1) == ',') exit name_loop
                      i = i+1
                      j2 = i
                   end do name_loop
@@ -985,6 +977,5 @@
          end do token_loop
 
       end subroutine get_chem_col_names
-
 
       end module read_model

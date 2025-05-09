@@ -2,42 +2,33 @@
    !
    !   Copyright (C) 2015-2019  The MESA Team
    !
-   !   MESA is free software; you can use it and/or modify
-   !   it under the combined terms and restrictions of the MESA MANIFESTO
-   !   and the GNU General Library Public License as published
-   !   by the Free Software Foundation; either version 2 of the License,
-   !   or (at your option) any later version.
-   !
-   !   You should have received a copy of the MESA MANIFESTO along with
-   !   this software; if not, it is available at the mesa website:
-   !   http://mesa.sourceforge.net/
-   !
-   !   MESA is distributed in the hope that it will be useful,
-   !   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-   !   See the GNU Library General Public License for more details.
-   !
-   !   You should have received a copy of the GNU Library General Public License
-   !   along with this software; if not, write to the Free Software
-   !   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
-   !
-   ! ***********************************************************************
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
+!
+!   This program is distributed in the hope that it will be useful,
+!   but WITHOUT ANY WARRANTY; without even the implied warranty of
+!   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+!   See the GNU Lesser General Public License for more details.
+!
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
+!
+! ***********************************************************************
 
       module pgstar_production
 
       use star_private_def
-      use const_def
+      use const_def, only: dp
       use pgstar_support
       use star_pgstar
 
       implicit none
 
-
       contains
 
-
       subroutine production_plot(id, device_id, ierr)
-         implicit none
          integer, intent(in) :: id, device_id
          integer, intent(out) :: ierr
 
@@ -84,31 +75,27 @@
          use chem_def
          use net_def
          use const_def, only: Msun
-         implicit none
+         use pgstar_colors
 
          type (star_info), pointer :: s
          integer, intent(in) :: id, device_id
-         real, intent(in) :: &
-            winxmin, winxmax, winymin, winymax
+         real, intent(in) :: winxmin, winxmax, winymin, winymax
          character (len=*), intent(in) :: title
          real, intent(in) :: txt_scale
          logical, intent(in) :: subplot
          integer, intent(out) :: ierr
 
-         character (len=strlen) :: str
-         real :: xmin, xmax, xleft, xright, dx, dylbl, chScale, windy, xmargin, &
-            ymin, ymax
-         integer :: lw, lw_sav, grid_min, grid_max, npts, i, nz
+         real :: xleft, xright, chScale, xmargin
          integer, parameter :: num_colors = 14
          integer :: colors(num_colors)
 
          include 'formats'
          ierr = 0
 
-         colors(:) = (/ &
+         colors(:) = [ &
                clr_Gold, clr_LightSkyBlue, clr_Crimson, clr_Goldenrod, clr_MediumSlateBlue, &
                clr_Coral, clr_LightSkyGreen, clr_DarkGray, clr_Lilac, &
-               clr_Tan, clr_IndianRed, clr_Teal, clr_Silver, clr_BrightBlue /)
+               clr_Tan, clr_IndianRed, clr_Teal, clr_Silver, clr_BrightBlue ]
 
          chScale = txt_scale
 
@@ -124,18 +111,16 @@
             use adjust_xyz, only: get_xa_for_standard_metals
             integer, intent(out) :: ierr
 
-            integer :: lw, lw_sav, k,i,j
-            real :: ybot, eps
+            integer :: i, j
 
-            integer :: amin,amax,z,n,a,plot_a,zmin,zmax
-            integer :: min_zone,max_zone,alternate,skip_cnt
-            real :: xhigh,xlow,extra_pad
+            integer :: amin,amax,z,n,a,zmin,zmax
+            integer :: min_zone,max_zone,alternate
+            real :: extra_pad
             real :: min_mass,max_mass,yloc
             real,parameter :: point_size=0.1
-            real :: ymin,ymax,r,g,b,log10_min_abun,log10_max_abun
+            real :: ymin, ymax
             real,parameter :: pad=1.0
-            real :: last_x,last_y,log_sa
-            logical :: z_in_use
+            real :: last_x,last_y
             real(dp),dimension(1:solsiz) :: scaled_abun,scaled_abun_init
             real(dp),dimension(:),allocatable :: init_comp,abun
 
@@ -148,7 +133,7 @@
             call pgsave
             call pgsch(txt_scale)
             call pgsvp(winxmin, winxmax, winymin, winymax)
-            
+
             amax=0
             amin=0.0
             zmax=0
@@ -222,14 +207,14 @@
             end do
 
             !Get stable isotope abundances
-            call get_stable_mass_frac(s%chem_id,s%species,dble(abun),scaled_abun) 
-            call get_stable_mass_frac(s%chem_id,s%species,init_comp,scaled_abun_init)           
+            call get_stable_mass_frac(s%chem_id,s%species,dble(abun),scaled_abun)
+            call get_stable_mass_frac(s%chem_id,s%species,init_comp,scaled_abun_init)
 
             do i=1,solsiz
-               
+
                la=safe_log10(scaled_abun(i))
                lac=safe_log10(scaled_abun_init(i))
-   
+
                !Remove low abundance isotopes, low in star and low in solar can lead to large production factor
                if(la <s% pg%production_min_mass_frac .or. lac <s% pg%production_min_mass_frac) then
                   scaled_abun(i)=-HUGE(ymin)
@@ -238,7 +223,7 @@
                   ymax=max(ymax,real(scaled_abun(i),kind=kind(ymax)))
                   ymin=min(ymin,real(scaled_abun(i),kind=kind(ymin)))
                end if
-      
+
                if(zmax==izsol(i)) amax=int(iasol(i))
 
             end do
@@ -285,13 +270,13 @@
                call show_model_number_pgstar(s)
                call show_age_pgstar(s)
             end if
-            call show_title_pgstar(s, title)           
+            call show_title_pgstar(s, title)
 
             alternate=-1
             i=1
-            outer: do 
+            outer: do
                if(i>solsiz) exit outer
-      
+
                ! Z is greater than zmax
                if(izsol(i)>zmax) exit outer
 
@@ -312,7 +297,7 @@
                last_y=-HUGE(last_y)
 
                inner: do j=i,solsiz
-               
+
                   if(izsol(j)==izsol(i))then
                      if((scaled_abun(j)>= ymin) .and. (scaled_abun(j) <= ymax)&
                         .and.(iasol(j)<=xright).and.(iasol(j)>=xleft)) then
@@ -323,12 +308,12 @@
                         !Not the first isotope of an element
                         if(last_x>0)then
                            !Then draw a line between isotopes of same element
-                           call pgline(2,(/last_x,A*1.0/),(/last_y,real(scaled_abun(j)*1.0)/))
+                           call pgline(2,[last_x,A*1.0],[last_y,real(scaled_abun(j)*1.0)])
                         end if
 
                         !Save last x,y pair we saw
                         last_x=A*1.0
-                        last_y=scaled_abun(j)               
+                        last_y=scaled_abun(j)
                      end if
                   else
                      exit inner
@@ -341,11 +326,11 @@
 
             call pgunsa
             deallocate(abun,init_comp)
-            
+
             call show_pgstar_decorator(id,s% pg% production_use_decorator,&
                   s% pg% production_pgstar_decorator, 0, ierr)
 
-            
+
          end subroutine plot
 
          subroutine set_line_style(cnt)

@@ -1,25 +1,19 @@
 ! ***********************************************************************
 !
-!   Copyright (C) 2013  Pablo Marchant
+!   Copyright (C) 2013  Pablo Marchant & The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
 
@@ -94,7 +88,6 @@
          integer, intent(in) :: level
          integer, intent(out) :: ierr
          logical, dimension(max_extra_inlists) :: read_extra
-         character (len=strlen) :: message
          character (len=strlen), dimension(max_extra_inlists) :: extra
          integer :: unit, i
 
@@ -139,13 +132,13 @@
             read_extra_binary_job_inlist(i) = .false.
             extra(i) = extra_binary_job_inlist_name(i)
             extra_binary_job_inlist_name(i) = 'undefined'
-            
+
             if (read_extra(i)) then
                call read_binary_job_file(b, extra(i), level+1, ierr)
                if (ierr /= 0) return
             end if
          end do
-         
+
       end subroutine read_binary_job_file
 
 
@@ -273,64 +266,64 @@
          character(len=*),intent(in) :: name
          character(len=*), intent(out) :: val
          integer, intent(out) :: ierr
-   
+
          character(len(name)) :: upper_name
          character(len=512) :: str
          integer :: iounit,iostat,ind,i
-   
-   
+
+
          ! First save current controls
          call set_binary_job_controls_for_writing(b, ierr)
          if(ierr/=0) return
-   
-         ! Write namelist to temporay file
+
+         ! Write namelist to temporary file
          open(newunit=iounit,status='scratch')
          write(iounit,nml=binary_job)
          rewind(iounit)
-   
-         ! Namelists get written in captials
+
+         ! Namelists get written in capitals
          upper_name = StrUpCase(name)
          val = ''
          ! Search for name inside namelist
-         do 
+         do
             read(iounit,'(A)',iostat=iostat) str
             ind = index(str,trim(upper_name))
             if( ind /= 0 ) then
-               val = str(ind+len_trim(upper_name)+1:len_trim(str)-1) ! Remove final comma and starting =
+               val = str(ind+len_trim(upper_name)+1:len_trim(str)-1)  ! Remove final comma and starting =
                do i=1,len(val)
                   if(val(i:i)=='"') val(i:i) = ' '
                end do
                exit
             end if
             if(is_iostat_end(iostat)) exit
-         end do   
-   
+         end do
+
          if(len_trim(val) == 0 .and. ind==0 ) ierr = -1
-   
+
          close(iounit)
-   
+
       end subroutine get_binary_job
-   
+
       subroutine set_binary_job(b, name, val, ierr)
          type (binary_info), pointer :: b
          character(len=*), intent(in) :: name, val
          character(len=len(name)+len(val)+14) :: tmp
          integer, intent(out) :: ierr
-   
+
          ! First save current controls
          call set_binary_job_controls_for_writing(b, ierr)
          if(ierr/=0) return
-   
+
          tmp=''
          tmp = '&binary_job '//trim(name)//'='//trim(val)//' /'
-   
+
          ! Load into namelist
          read(tmp, nml=binary_job)
-   
+
          ! Add to star
          call store_binary_job_controls(b, ierr)
          if(ierr/=0) return
-   
+
       end subroutine set_binary_job
 
 

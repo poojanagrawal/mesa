@@ -12,13 +12,13 @@ include $(MESA_DIR)/utils/makefile_header
 #
 # SOURCES
 
-COMMON_SRCS = test_support.o test_int_support.o \
-   bari_beam.o test_beam.o \
-   bari_chemakzo.o test_chemakzo.o \
-   bari_medakzo.o test_medakzo.o \
-   bari_vdpol.o test_vdpol.o \
-   test_diffusion.o test_brent.o test_bobyqa.o test_newuoa.o \
-   test_simplex.o test_newton.o test_integrate.f
+COMMON_SRCS = test_support.f90 test_int_support.f90 \
+   bari_beam.f90 test_beam.f90 \
+   bari_chemakzo.f90 test_chemakzo.f90 \
+   bari_medakzo.f90 test_medakzo.f90 \
+   bari_vdpol.f90 test_vdpol.f90 \
+   test_diffusion.f90 test_brent.f90 test_bobyqa.f90 test_newuoa.f90 \
+   test_simplex.f90 test_newton.f90 test_integrate.f90
 
 TEST_SRCS = $(COMMON_SRCS) test_num.o
 
@@ -46,9 +46,9 @@ TEST = $(TEST_DIR)/tester
 TEST_MPI = $(TEST_DIR)/test_mpi
 SAMPLE = $(TEST_DIR)/sample
 
-TEST_OBJS = $(patsubst %.f,%.o,$(patsubst %.f90,%.o,$(TEST_SRCS)))
-TEST_MPI_OBJS = $(patsubst %.f,%.o,$(patsubst %.f90,%.o,$(TEST_MPI_SRCS)))
-SAMPLE_OBJS = $(patsubst %.f,%.o,$(patsubst %.f90,%.o,$(SAMPLE_SRCS)))
+TEST_OBJS = $(patsubst %.f90,%.o,$(TEST_SRCS))
+TEST_MPI_OBJS = $(patsubst %.f90,%.o,$(TEST_MPI_SRCS))
+SAMPLE_OBJS = $(patsubst %.f90,%.o,$(SAMPLE_SRCS))
 
 all : $(TEST) $(SAMPLE)
 
@@ -77,42 +77,14 @@ nodeps : $(.DEFAULT_GOAL)
 #
 # COMPILATION RULES
 
-COMPILE_NC = $(FC) $(FCbasic) $(FCopenmp) $(FCstatic) $(FCopt) $(FCfixed) $(TEST_INCLUDES) -c
+COMPILE = $(FCbasic) $(FCopenmp) $(FCopt) $(FCfree)
 
-COMPILE_LEGACY_NC = $(filter-out -std=f2008, $(COMPILE_NC)) -std=legacy
-TEST_COMPILE_LEGACY = $(filter-out -std=f2008, $(TEST_COMPILE)) -std=legacy
-
-test_brent.o test_simplex.o : %.o : %.f
+%.o: %.f90
 ifneq ($(QUIET),)
-	@echo TEST_COMPILE_LEGACY $<
-	@$(TEST_COMPILE_LEGACY) $(FCfree) $<
+	@echo TEST_COMPILE $<
+	@$(TEST_COMPILE) $(COMPILE) $<
 else
-	$(TEST_COMPILE_LEGACY) $(FCfree) $<
-endif
-
-test_bobyqa.o test_newuoa.o : %.o : %.f
-ifneq ($(QUIET),)
-	@echo TEST_COMPILE_LEGACY $<
-	@$(TEST_COMPILE_LEGACY) $(FCfixed) $<
-else
-	$(TEST_COMPILE_LEGACY) $(FCfixed) $<
-endif
-
-bari_vdpol.o bari_vdpol3.o bari_vdpol_x.o bari_vdpol3_x.o bari_medakzo.o bari_hires.o \
-  bari_pollu.o bari_rober.o bari_beam.o bari_chemakzo.o : %.o : %.f
-ifneq ($(QUIET),)
-	@echo COMPILE_LEGACY_NC $<
-	@$(COMPILE_LEGACY_NC) $<
-else
-	$(COMPILE_LEGACY_NC) $<
-endif
-
-%.o: %.f
-ifneq ($(QUIET),)
-	@echo TEST_COMPILE_LEGACY $<
-	@$(TEST_COMPILE_LEGACY) $(FCfree) $<
-else
-	$(TEST_COMPILE_LEGACY) $(FCfree) $<
+	$(TEST_COMPILE) $(COMPILE) $<
 endif
 
 #################################################################
@@ -121,7 +93,7 @@ endif
 
 SRC_PATH = $(TEST_SRC_DIR)
 
-vpath %.f $(SRC_PATH)
+vpath %.f90 $(SRC_PATH)
 
 vpath %.mod $(LOCAL_LIB_DIR):$(MESA_DIR)/include
 

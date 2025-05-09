@@ -2,32 +2,25 @@
 !
 !   Copyright (C) 2010-2021  The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
-
 
 module turb_support
 
 use star_private_def
-use const_def
+use const_def, only: dp, crad, no_mixing
 use num_lib
 use utils_lib
 use auto_diff_support
@@ -37,7 +30,9 @@ use turb
 implicit none
 
 private
-public :: get_gradT, do1_mlt_eval, Get_results
+public :: get_gradT
+public :: do1_mlt_eval
+public :: Get_results
 
 contains
 
@@ -60,7 +55,7 @@ contains
       end if
    end function check_if_must_fall_back_to_MLT
 
-   subroutine get_gradT(s, MLT_option, & ! used to create models
+   subroutine get_gradT(s, MLT_option, &  ! used to create models
          r, L, T, P, opacity, rho, chiRho, chiT, Cp, gradr, grada, scale_height, &
          iso, XH1, cgrav, m, gradL_composition_term, mixing_length_alpha, &
          mixing_type, gradT, Y_face, conv_vel, D, Gamma, ierr)
@@ -71,7 +66,7 @@ contains
          XH1, cgrav, m, gradL_composition_term, mixing_length_alpha
       integer, intent(in) :: iso
       real(dp), intent(out) :: gradT, Y_face, conv_vel, D, Gamma
-      integer, intent(out) :: mixing_type, ierr 
+      integer, intent(out) :: mixing_type, ierr
       type(auto_diff_real_star_order1) :: &
          gradr_ad, grada_ad, scale_height_ad, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, &
          Gamma_ad, r_ad, L_ad, T_ad, P_ad, opacity_ad, rho_ad, dV_ad, chiRho_ad, chiT_ad, Cp_ad
@@ -101,8 +96,8 @@ contains
       D = D_ad%val
       Gamma = Gamma_ad%val
    end subroutine get_gradT
-   
-      
+
+
    subroutine do1_mlt_eval( &
          s, k, MLT_option, gradL_composition_term, &
          gradr_in, grada, scale_height, mixing_length_alpha, &
@@ -117,16 +112,16 @@ contains
       integer, intent(out) :: mixing_type
       type(auto_diff_real_star_order1), intent(out) :: &
          gradT, Y_face, mlt_vc, D, Gamma
-      integer, intent(out) :: ierr 
-              
-      real(dp) :: cgrav, m, XH1, gradL_old, grada_face_old
-      integer :: iso, old_mix_type
+      integer, intent(out) :: ierr
+
+      real(dp) :: cgrav, m, XH1
+      integer :: iso
       type(auto_diff_real_star_order1) :: gradr, r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp
       include 'formats'
       ierr = 0
 
       gradr = gradr_in
-      
+
       cgrav = s% cgrav(k)
       m = s% m_grav(k)
       L = wrap_L_00(s,k)
@@ -141,7 +136,7 @@ contains
       Cp = get_Cp_face(s,k)
       iso = s% dominant_iso_for_thermohaline(k)
       XH1 = s% xa(s% net_iso(ih1),k)
-      
+
       if (s% use_other_mlt_results) then
          call s% other_mlt_results(s% id, k, MLT_option, &
             r, L, T, P, opacity, rho, chiRho, chiT, Cp, gradr, grada, scale_height, &
@@ -182,33 +177,43 @@ contains
       integer, intent(out) :: mixing_type
       type(auto_diff_real_star_order1), intent(out) :: gradT, Y_face, conv_vel, D, Gamma
       integer, intent(out) :: ierr
-      
+
       type(auto_diff_real_star_order1) :: Pr, Pg, grav, Lambda, gradL, beta
-      real(dp) :: conv_vel_start, scale
+      real(dp) :: conv_vel_start, scale, max_conv_vel
 
       ! these are used by use_superad_reduction
       real(dp) :: Gamma_limit, scale_value1, scale_value2, diff_grads_limit, reduction_limit, lambda_limit
       type(auto_diff_real_star_order1) :: Lrad_div_Ledd, Gamma_inv_threshold, Gamma_factor, alfa0, &
          diff_grads_factor, Gamma_term, exp_limit, grad_scale, gradr_scaled
 
-      character (len=256) :: message        
       logical ::  test_partials, using_TDC
       logical, parameter :: report = .false.
       real(dp):: R0, A, u_tilda, k_tilda
       real(dp):: tiny = 1d-12
       include 'formats'
 
-      ! Pre-calculate some things. 
+      ! Pre-calculate some things.
       Pr = crad*pow4(T)/3d0
       Pg = P - Pr
       beta = Pg / P
       Lambda = mixing_length_alpha*scale_height
-      grav = cgrav*m/pow2(r)   
+      grav = cgrav*m/pow2(r)
+      max_conv_vel = 1d99
       if (s% use_Ledoux_criterion) then
-         gradL = grada + gradL_composition_term ! Ledoux temperature gradient
+         gradL = grada + gradL_composition_term  ! Ledoux temperature gradient
       else
          gradL = grada
       end if
+
+      ! maximum convection velocity.
+      if (k>=1) then
+         if (s% q(k) <= s% max_conv_vel_div_csound_maxq) then
+             max_conv_vel = s% csound_face(k) * s% max_conv_vel_div_csound
+         else
+            max_conv_vel = 1d99
+         end if
+      end if
+
 
       ! Initialize with no mixing
       mixing_type = no_mixing
@@ -216,7 +221,7 @@ contains
       Y_face = gradT - gradL
       conv_vel = 0d0
       D = 0d0
-      Gamma = 0d0  
+      Gamma = 0d0
       if (k /= 0) s% superad_reduction_factor(k) = 1d0
 
       ! Bail if we asked for no mixing, or if parameters are bad.
@@ -265,9 +270,10 @@ contains
          end if
 
          call set_TDC(&
-            conv_vel_start, mixing_length_alpha, s% alpha_TDC_DAMP, s%alpha_TDC_DAMPR, s%alpha_TDC_PtdVdt, s%dt, cgrav, m, report, &
+            conv_vel_start, mixing_length_alpha, &
+            s% alpha_TDC_DAMP, s%alpha_TDC_DAMPR, s%alpha_TDC_PtdVdt, s%dt, cgrav, m, report, &
             mixing_type, scale, chiT, chiRho, gradr, r, P, T, rho, dV, Cp, opacity, &
-            scale_height, gradL, grada, conv_vel, D, Y_face, gradT, s%tdc_num_iters(k), ierr)
+            scale_height, gradL, grada, conv_vel, D, Y_face, gradT, s%tdc_num_iters(k), max_conv_vel, ierr)
          s% dvc_dt_TDC(k) = (conv_vel%val - conv_vel_start) / s%dt
 
             if (ierr /= 0) then
@@ -283,9 +289,10 @@ contains
             call set_superad_reduction
             if (Gamma_factor > 1d0) then
                call set_TDC(&
-                  conv_vel_start, mixing_length_alpha, s% alpha_TDC_DAMP, s%alpha_TDC_DAMPR, s%alpha_TDC_PtdVdt, s%dt, cgrav, m, report, &
+                  conv_vel_start, mixing_length_alpha, &
+                  s% alpha_TDC_DAMP, s%alpha_TDC_DAMPR, s%alpha_TDC_PtdVdt, s%dt, cgrav, m, report, &
                   mixing_type, scale, chiT, chiRho, gradr_scaled, r, P, T, rho, dV, Cp, opacity, &
-                  scale_height, gradL, grada, conv_vel, D, Y_face, gradT, s%tdc_num_iters(k), ierr)
+                  scale_height, gradL, grada, conv_vel, D, Y_face, gradT, s%tdc_num_iters(k), max_conv_vel, ierr)
                s% dvc_dt_TDC(k) = (conv_vel%val - conv_vel_start) / s%dt
                if (ierr /= 0) then
                   if (s% report_ierr) write(*,*) 'ierr from set_TDC when using superad_reduction'
@@ -299,7 +306,8 @@ contains
          call set_MLT(MLT_option, mixing_length_alpha, s% Henyey_MLT_nu_param, s% Henyey_MLT_y_param, &
                         chiT, chiRho, Cp, grav, Lambda, rho, P, T, opacity, &
                         gradr, grada, gradL, &
-                        Gamma, gradT, Y_face, conv_vel, D, mixing_type, ierr)
+                        Gamma, gradT, Y_face, conv_vel, D, mixing_type, max_conv_vel, ierr)
+
 
          if (ierr /= 0) then
             if (s% report_ierr) write(*,*) 'ierr from set_MLT'
@@ -385,7 +393,8 @@ contains
                call set_MLT(MLT_option, mixing_length_alpha, s% Henyey_MLT_nu_param, s% Henyey_MLT_y_param, &
                               chiT, chiRho, Cp, grav, Lambda, rho, P, T, opacity, &
                               gradr_scaled, grada, gradL, &
-                              Gamma, gradT, Y_face, conv_vel, D, mixing_type, ierr)
+                              Gamma, gradT, Y_face, conv_vel, D, mixing_type, max_conv_vel, ierr)
+
                if (ierr /= 0) then
                   if (s% report_ierr) write(*,*) 'ierr from set_MLT when using superad_reduction'
                   return
@@ -416,7 +425,7 @@ contains
                return
             end if
          end if
-      end if 
+      end if
 
       ! If there's too-little mixing to bother, or we hit a bad value, fall back on no mixing.
       if (D%val < s% remove_small_D_limit .or. is_bad(D%val)) then
@@ -475,7 +484,7 @@ contains
                   end if
                   !Gamma_term = Gamma_term + scale_value2*pow2(Lrad_div_Ledd/Gamma_inv_threshold-1d0)
                end if
-               
+
                if (Gamma_term > 0d0) then
                   Gamma_factor = Gamma_term/pow(beta,0.5d0)*diff_grads_factor
                   Gamma_factor = Gamma_factor + 1d0
@@ -486,13 +495,13 @@ contains
                   end if
                end if
             end if
-         end if 
+         end if
          if (k /= 0) s% superad_reduction_factor(k) = Gamma_factor% val
          if (Gamma_factor > 1d0) then
             grad_scale = (gradr-gradL)/(Gamma_factor*gradr) + gradL/gradr
             gradr_scaled = grad_scale*gradr
          end if
-      end
+      end subroutine set_superad_reduction
 
       subroutine rotating_MLT(R0,u_tilda, k_tilda)
          real(dp), intent(in) :: R0
@@ -588,6 +597,5 @@ contains
 
       end function
    end subroutine Get_results
-
 
 end module turb_support

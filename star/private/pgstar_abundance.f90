@@ -2,42 +2,33 @@
 !
 !   Copyright (C) 2010-2019  The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
 
       module pgstar_abundance
 
       use star_private_def
-      use const_def
+      use const_def, only: dp
       use pgstar_support
       use star_pgstar
 
       implicit none
 
-
       contains
 
-
       subroutine abundance_plot(id, device_id, ierr)
-         implicit none
          integer, intent(in) :: id, device_id
          integer, intent(out) :: ierr
 
@@ -88,7 +79,7 @@
          use chem_def
          use net_def
          use const_def, only: Msun, Rsun
-         implicit none
+         use pgstar_colors
 
          type (star_info), pointer :: s
          integer, intent(in) :: id, device_id
@@ -100,11 +91,10 @@
             xaxis_reversed, panel_flag, xaxis_numeric_labels_flag
          integer, intent(out) :: ierr
 
-         character (len=strlen) :: str
          real, allocatable, dimension(:) :: xvec, yvec
          real :: xmin, xmax, xleft, xright, dx, dylbl, chScale, windy, xmargin, &
             ymin, ymax, legend_xmin, legend_xmax, legend_ymin, legend_ymax
-         integer :: lw, lw_sav, grid_min, grid_max, npts, i, nz
+         integer :: lw, lw_sav, grid_min, grid_max, npts, nz
          integer, parameter :: num_colors = 14
          integer :: colors(num_colors)
          integer, parameter :: max_num_labels = 30
@@ -115,10 +105,10 @@
          ierr = 0
          nz = s% nz
 
-         colors(:) = (/ &
+         colors(:) = [ &
                clr_Gold, clr_LightSkyBlue, clr_Crimson, clr_Goldenrod, clr_MediumSlateBlue, &
                clr_Coral, clr_LightSkyGreen, clr_DarkGray, clr_Lilac, &
-               clr_Tan, clr_IndianRed, clr_Teal, clr_Silver, clr_BrightBlue /)
+               clr_Tan, clr_IndianRed, clr_Teal, clr_Silver, clr_BrightBlue ]
 
          chScale = txt_scale
 
@@ -153,11 +143,10 @@
             use rates_def
             integer, intent(out) :: ierr
 
-            integer :: ii, jj, i, k, xaxis_id
+            integer :: i, k
             logical, parameter :: dbg = .false.
-            logical :: found_shock
-            real(dp) :: xshock, photosphere_logxm
-            real :: lgz, x, y, ybot
+            real(dp) :: photosphere_logxm
+            real :: lgz, x, ybot
 
             include 'formats'
             ierr = 0
@@ -176,7 +165,7 @@
             end if
 
             num_labels = max(0,min(max_num_labels, s% pg% num_abundance_line_labels))
-            
+
             iloc_abundance_label = -HUGE(grid_min)
             xloc_abundance_label = -HUGE(grid_min)
             do i=1,num_labels
@@ -212,7 +201,7 @@
                   call show_age_pgstar(s)
                end if
                call show_title_pgstar(s, title)
-               call pgsci(1)
+               call pgsci(clr_Foreground)
                call show_xaxis_name(s,xaxis_name,ierr)
                if (ierr /= 0) return
             end if
@@ -220,7 +209,7 @@
             ybot = -0.05
             call pgswin(xleft, xright, ymin+ybot, ymax)
             call pgscf(1)
-            call pgsci(1)
+            call pgsci(clr_Foreground)
             if (xaxis_numeric_labels_flag) then
                call show_box_pgstar(s,'BCNST','BCNSTV')
             else
@@ -233,14 +222,14 @@
             call do_all(.false.)
             call pgunsa
 
-            if (.not. panel_flag) then ! show mix regions at bottom of plot
+            if (.not. panel_flag) then  ! show mix regions at bottom of plot
                call pgslw(10)
                call show_mix_regions_on_xaxis( &
                   s,ymin+ybot,ymax,grid_min,grid_max,xvec)
             end if
 
             call pgunsa
-            
+
             if (s% pg% Abundance_show_photosphere_location .and. &
                   (xaxis_name == 'mass' .or. &
                    xaxis_name == 'logxm' .or. &
@@ -273,7 +262,7 @@
                call pgdraw(dx, 1.0)
                call pgunsa
             end if
-            
+
          call show_pgstar_decorator(s%id,s% pg% Abundance_use_decorator,s% pg% Abundance_pgstar_decorator,0, ierr)
 
          end subroutine plot
@@ -281,7 +270,7 @@
 
          subroutine do_all(legend_flag)
             logical, intent(in) :: legend_flag
-            integer :: cnt, num_to_show, i, j, k, jmax
+            integer :: cnt, num_to_show, i, j, jmax
             real(dp) :: max_abund(s% species)
             include 'formats'
             cnt = 0
@@ -289,7 +278,7 @@
             do j=1, s% species
                max_abund(j) = maxval(s% xa(j,grid_min:grid_max))
             end do
-            if (num_to_show < 0) then ! show as many as fit
+            if (num_to_show < 0) then  ! show as many as fit
                if (legend_flag) then
                   jmax = min(s% species, max_num_labels)
                else
@@ -309,7 +298,7 @@
 
 
          integer function do1(cnt, str, legend_flag)
-            use chem_lib
+            use chem_lib, only: chem_get_iso_id
             integer, intent(in) :: cnt
             character (len=*), intent(in) :: str
             logical, intent(in) :: legend_flag
@@ -386,8 +375,8 @@
          integer function abundance_line_legend(cnt, str)
             integer, intent(in) :: cnt
             character (len=*), intent(in) :: str
-            real :: ymx, dx, dyline, ypos, xpts(2), ypts(2)
-            integer :: iclr, max_cnt
+            real :: dx, dyline, ypos, xpts(2), ypts(2)
+            integer :: max_cnt
             max_cnt = min(max_num_labels, s% pg% Abundance_legend_max_cnt)
             if (cnt >= max_cnt) then
                abundance_line_legend = cnt
@@ -403,15 +392,12 @@
             call pgslw(lw)
             call pgline(2, xpts, ypts)
             call pgslw(lw_sav)
-            call pgsci(1)
+            call pgsci(clr_Foreground)
             call pgsch(txt_scale*s% pg% Abundance_legend_txt_scale_factor)
             call pgptxt(xpts(2) + dx, ypos, 0.0, 0.0, trim(str))
             abundance_line_legend = cnt + 1
          end function abundance_line_legend
 
-
       end subroutine do_abundance_panel
 
-
       end module pgstar_abundance
-

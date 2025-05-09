@@ -2,24 +2,18 @@
 !
 !   Copyright (C) 2010  The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
 
@@ -34,7 +28,6 @@
 
       contains
 
-
       subroutine read_star_photo(s, fname, ierr)
          use utils_lib, only: integer_dict_define, integer_dict_create_hash
          use rates_def, only: num_rvs
@@ -46,14 +39,13 @@
          integer, intent(out) :: ierr
 
          integer :: iounit, i, j, k, version, part_number, &
-            len_history_col_spec, nz, kk
+            len_history_col_spec, nz
          logical, parameter :: dbg = .false.
-         real(dp) :: xx
 
          include 'formats'
 
          ierr = 0
-         part_number = 0 ! part_numbers are just a consistency check
+         part_number = 0  ! part_numbers are just a consistency check
 
          write(*, *) 'read ', trim(fname)
          open(newunit=iounit, file=trim(fname), action='read', &
@@ -76,7 +68,7 @@
          if (failed('initial_z')) return
 
          read(iounit, iostat=ierr) &
-            s% initial_z, & ! need this since read_model can change what is in the inlist
+            s% initial_z, &  ! need this since read_model can change what is in the inlist
             s% total_num_solver_iterations, &
             s% nz, s% nvar_hydro, s% nvar_chem, s% nvar_total, &
             s% v_flag, s% u_flag, s% rotation_flag, s% RSP2_flag, s% RSP_flag, &
@@ -96,10 +88,10 @@
             s% have_initial_energy_integrals, s% total_energy_initial, &
             s% force_tau_factor, s% force_Tsurf_factor, s% force_opacity_factor, &
             s% crystal_core_boundary_mass
-         
+
          if (failed('initial_y')) return
-         s% nz_old = s% nz ! needed by alloc
-         
+         s% nz_old = s% nz  ! needed by alloc
+
          if (s% force_tau_factor > 0 .and. s% tau_factor /= s% force_tau_factor .and. &
                s% tau_factor /= s% job% set_to_this_tau_factor) then
             s% tau_factor = s% force_tau_factor
@@ -148,7 +140,7 @@
          read(iounit, iostat=ierr) &
             s% dq(1:nz), s% xa(:,1:nz), s% xh(:,1:nz), &
             s% omega(1:nz), s% j_rot(1:nz), s% mlt_vc(1:nz), s% conv_vel(1:nz), &
-            s% D_ST_start(1:nz), s% nu_ST_start(1:nz), & ! needed for ST time smoothing
+            s% D_ST_start(1:nz), s% nu_ST_start(1:nz), &  ! needed for ST time smoothing
             s% have_ST_start_info
 
          call read_part_number(iounit)
@@ -185,7 +177,7 @@
          if (failed('read_part_number')) return
 
          read(iounit, iostat=ierr) &
-            s% num_skipped_setvars, s% num_retries, s% num_setvars, &  
+            s% num_skipped_setvars, s% num_retries, s% num_setvars, &
             s% total_num_solver_iterations, s% total_num_solver_relax_iterations, &
             s% total_num_solver_calls_made, s% total_num_solver_relax_calls_made, &
             s% total_num_solver_calls_converged, s% total_num_solver_relax_calls_converged, &
@@ -281,7 +273,7 @@
             if (failed('integer_dict_create_hash history_names_dict')) return
 
          end if
-         
+
          if (s% rsp_flag) then
             call rsp_photo_in(s, iounit, ierr)
             if (failed('after rsp_photo_in')) return
@@ -295,8 +287,8 @@
 
          call read_part_number(iounit)
          if (failed('final read_part_number')) return
-         
-         s% need_to_setvars = .true. ! set this after photo out or photo in
+
+         s% need_to_setvars = .true.  ! set this after photo out or photo in
 
          close(iounit)
 
@@ -323,8 +315,6 @@
             failed = .false.
          end function failed
 
-
       end subroutine read_star_photo
-
 
       end module photo_in

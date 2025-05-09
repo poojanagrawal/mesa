@@ -1,13 +1,13 @@
-   
+
       subroutine lapack_decsol(iop,n,ndim,a,ml,mu,b,ip,lrd,rpar_decsol,lid,ipar_decsol,ier)
          use const_def, only: dp
          integer, intent(in) :: iop, n, ndim, lrd, lid
          integer, intent(in) :: ml
             ! if ml=n: full matrix.
-            ! if 0<=ml<n: ml is the lower bandwith of matrix
+            ! if 0<=ml<n: ml is the lower bandwidth of matrix
                ! (>= number of non-zero diagonals below the main diagonal).
          integer, intent(in) :: mu
-            ! upper bandwith of the matrix (need not be defined if ml=n)
+            ! upper bandwidth of the matrix (need not be defined if ml=n)
                ! (>= number of non-zero diagonals above the main diagonal).
          ! for banded matrix, format as needed for dgbtrf
          integer, intent(inout), pointer :: ip(:) ! (n)
@@ -37,7 +37,7 @@
          end if
       end subroutine lapack_decsol
 
-      
+
       subroutine lapack_work_sizes(n,lrd,lid)
          integer, intent(in) :: n
          integer, intent(out) :: lrd,lid
@@ -46,10 +46,9 @@
       end subroutine lapack_work_sizes
 
 
-      
       ! complex(dp) routines
 
-      
+
       subroutine lapack_zwork_sizes(n,mu,ml,lcd,lrd,lid)
          integer, intent(in) :: n,mu,ml
          integer, intent(out) :: lcd,lrd,lid
@@ -63,7 +62,6 @@
          lrd = 0
          lcd = lda*(n+1) + n
       end subroutine lapack_zwork_sizes
-      
 
 
       subroutine lapack_decsolc(iop,n,ndim,ar,ai,ml,mu,br,bi,ip,lcd,cpar_decsol,lrd,rpar_decsol,lid,ipar_decsol,ier)
@@ -71,10 +69,10 @@
          integer, intent(in) :: iop, n, ndim, lcd, lrd, lid
          integer, intent(in) :: ml
             ! if ml=n: full matrix.
-            ! if 0<=ml<n: ml is the lower bandwith of matrix
+            ! if 0<=ml<n: ml is the lower bandwidth of matrix
                ! (>= number of non-zero diagonals below the main diagonal).
          integer, intent(in) :: mu
-            ! upper bandwith of the matrix (need not be defined if ml=n)
+            ! upper bandwidth of the matrix (need not be defined if ml=n)
                ! (>= number of non-zero diagonals above the main diagonal).
          integer, intent(inout) :: ip(n)
          real(dp), intent(inout) :: ar(ndim,n), ai(ndim,n)
@@ -112,12 +110,12 @@
          real(dp), intent(inout), pointer :: rpar_decsol(:) ! (lrd)
          integer, intent(inout), pointer :: ipar_decsol(:) ! (lid)
          integer, intent(out) :: ier
-         
+
          ! lcd must be >= n*ndim
-         
+
          complex(dp), pointer :: a(:,:)
          integer :: i, j
-         
+
          i=1
          a(1:ndim,1:n) => cpar_decsol(i:i+n*ndim-1)
          i=i+n*ndim
@@ -125,10 +123,10 @@
             ier = -1
             return
          end if
-         
+
          do j=1,n
             do i=1,ndim
-               a(i,j) = cmplx(ar(i,j),ai(i,j))
+               a(i,j) = cmplx(ar(i,j),ai(i,j), kind=dp)
             end do
          end do
          call zgetrf(n, n, a, ndim, ip, ier)
@@ -138,11 +136,10 @@
                ai(i,j) = AIMAG(a(i,j))
             end do
          end do
-         
+
       end subroutine lapack_decc
-         
-      
-      
+
+
       subroutine lapack_decbc(n,ndim,ar,ai,ml,mu,ip,lcd,cpar_decsol,lrd,rpar_decsol,lid,ipar_decsol,ier)
          use const_def, only: dp
          integer, intent(in) :: n, ndim, ml, mu, lcd, lrd, lid
@@ -152,12 +149,12 @@
          real(dp), intent(inout), pointer :: rpar_decsol(:) ! (lrd)
          integer, intent(inout), pointer :: ipar_decsol(:) ! (lid)
          integer, intent(out) :: ier
-         
+
          ! ldc must be >= n*ndim
-         
+
          complex(dp), pointer :: a(:,:)
          integer :: i, j
-         
+
          i=1
          a(1:ndim,1:n) => cpar_decsol(i:i+n*ndim-1)
          i=i+n*ndim
@@ -165,10 +162,10 @@
             ier = -1
             return
          end if
-         
+
          do j=1,n
             do i=1,ndim
-               a(i,j) = cmplx(ar(i,j),ai(i,j))
+               a(i,j) = cmplx(ar(i,j),ai(i,j), kind=dp)
             end do
          end do
          call zgbtrf(n, n, ml, mu, a, ndim, ip, ier)
@@ -178,10 +175,10 @@
                ai(i,j) = AIMAG(a(i,j))
             end do
          end do
-         
+
       end subroutine lapack_decbc
-      
-      
+
+
       subroutine lapack_solc(n,ndim,ar,ai,br,bi,ip,lcd,cpar_decsol,lrd,rpar_decsol,lid,ipar_decsol,ier)
          integer, intent(in) :: n, ndim, lcd, lrd, lid
          integer, intent(in) :: ip(n)
@@ -191,12 +188,12 @@
          real(dp), intent(inout), pointer :: rpar_decsol(:) ! (lrd)
          integer, intent(inout), pointer :: ipar_decsol(:) ! (lid)
          integer, intent(out) :: ier
-         
+
          ! ldc must be >= n*(ndim+1)
-         
+
          complex(dp), pointer :: a(:,:), b(:)
          integer :: i, j
-         
+
          i = 1
          a(1:ndim,1:n) => cpar_decsol(i:i+n*ndim-1)
          i=i+n*ndim
@@ -205,12 +202,12 @@
             ier = -1
             return
          end if
-         
+
          do j=1,n
             do i=1,ndim
-               a(i,j) = cmplx(ar(i,j),ai(i,j))
+               a(i,j) = cmplx(ar(i,j),ai(i,j), kind=dp)
             end do
-            b(j) = cmplx(br(j),bi(j))
+            b(j) = cmplx(br(j),bi(j), kind=dp)
          end do
          call zgetrs('N', n, 1, a, ndim, ip, b, n, ier)
          do j=1,n
@@ -232,12 +229,12 @@
          real(dp), intent(inout), pointer :: rpar_decsol(:) ! (lrd)
          integer, intent(inout), pointer :: ipar_decsol(:) ! (lid)
          integer, intent(out) :: ier
-         
+
          ! ldc must be >= n*(ndim+1)
-         
+
          complex(dp), pointer :: a(:,:), b(:)
          integer :: i, j
-         
+
          i = 1
          a(1:ndim,1:n) => cpar_decsol(i:i+n*ndim-1)
          i=i+n*ndim
@@ -246,12 +243,12 @@
             ier = -1
             return
          end if
-         
+
          do j=1,n
             do i=1,ndim
-               a(i,j) = cmplx(ar(i,j),ai(i,j))
+               a(i,j) = cmplx(ar(i,j),ai(i,j), kind=dp)
             end do
-            b(j) = cmplx(br(j),bi(j))
+            b(j) = cmplx(br(j),bi(j), kind=dp)
          end do
          call zgbtrs('N', n, ml, mu, 1, a, ndim, ip, b, n, ier)
          do j=1,n
@@ -260,8 +257,8 @@
                bi(j) = AIMAG(b(j))
             end do
          end do
-         
-         
+
+
       end subroutine lapack_solbc
-      
-      
+
+

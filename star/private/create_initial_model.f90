@@ -2,31 +2,26 @@
 !
 !   Copyright (C) 2012-2019  Phil Arras & The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
 
       module create_initial_model
 
       use star_private_def
-      use const_def
+      use const_def, only: dp, pi, pi4, mp, lsun, msun, standard_cgrav, boltzm, boltz_sigma, &
+                           arg_not_provided, two_thirds, four_thirds_pi
       use chem_def
 
       implicit none
@@ -34,12 +29,10 @@
       private
       public :: build_initial_model
 
-
       integer :: eos_handle, kap_handle, species
 
       real(dp) :: X, Z, Y, G, abar, zbar, z2bar, z53bar, ye
       real (dp) :: Tmin,eps,R_try
-
 
       integer, parameter :: max_species=1000
       real(dp) :: xa(max_species)
@@ -57,9 +50,7 @@
       type (create_star_info), target, save :: &
          create_star_handles(max_create_star_handles)
 
-
       contains
-
 
       subroutine get_create_star_ptr(id,cs,ierr)
          integer, intent(in) :: id
@@ -76,7 +67,6 @@
       end subroutine get_create_star_ptr
 
 
-
       subroutine build_initial_model(s, ierr)
          use chem_lib, only: basic_composition_info, chem_Xsol
          use adjust_xyz, only: get_xa_for_standard_metals
@@ -88,7 +78,7 @@
 
          integer :: initial_zfracs, i_lum, i, j, k, itry, max_try, id0, id1, id2
          real(dp) :: M, R, initial_y, initial_h1, initial_h2, initial_he3, initial_he4, &
-            S0, Pc0, rhoc0, e0(2), S1, Pc1, e1(2), S2, Pc2, e2(2), det, dPc, dS, safefac, &
+            S0, Pc0, e0(2), S1, Pc1, e1(2), S2, Pc2, e2(2), det, dPc, dS, safefac, &
             initial_z, xsol_he3, xsol_he4, mass_correction, mat(2,2), minv(2,2), sumx
          type (create_star_info), pointer :: cs
 
@@ -157,8 +147,8 @@
             mass_correction, sumx)
 
          G = standard_cgrav
-         Tmin = 0.d0 ! sets surface isotherm
-         eps = s% initial_model_eps ! integration accuracy
+         Tmin = 0.d0  ! sets surface isotherm
+         eps = s% initial_model_eps  ! integration accuracy
          R_try = R   ! used to set grid spacing near the center
 
          ! init guess
@@ -217,7 +207,7 @@
 
          end do
 
-         s% nz = cs% nz - 1 ! skip center point
+         s% nz = cs% nz - 1  ! skip center point
          call allocate_star_info_arrays(s, ierr)
          if (ierr /= 0) then
             return
@@ -235,7 +225,7 @@
          i_lum = s% i_lum
 
          do k=1, s% nz
-            i = s% nz - k + 2 ! skip center point
+            i = s% nz - k + 2  ! skip center point
             call store_rho_in_xh(s, k, cs% rhog(i))
             call store_T_in_xh(s, k, cs% Tg(i))
             call store_r_in_xh(s, k, cs% rg(i))
@@ -255,13 +245,13 @@
       end subroutine build_initial_model
 
 
-
       ! output
       !errvec(1)=(mass-M)/M
       !errvec(2)=(radius-R)/R
       subroutine PSerrfunc(id,Pcguess,Sguess,M,R,errvec)
          integer, intent(in) :: id
-         real(dp) :: Pcguess,Sguess,M,R,errvec(2)
+         real(dp), intent(in) :: Pcguess,Sguess,M,R
+         real(dp), intent(out) :: errvec(2)
 
          integer :: ierr
          real(dp) :: rhoc,Tc,Pc,S
@@ -311,7 +301,7 @@
          m1 = four_thirds_pi * rhoc * r1*r1*r1
          P = Pc - two_thirds*pi * G*rhoc*rhoc*r1*r1
          intdmT1=m1*Tc
-         y=(/r1,m1,intdmT1/)
+         y=[r1,m1,intdmT1]
          call get_TRho_from_PS(cs,P,S,T,rho)
 
          ! record first point off center
@@ -334,11 +324,11 @@
 
             ! 4th order rk step
             dy1=dydP*d_P
-            call derivs(cs,P+dP/2d0,S,y+dy1/2d0,dydP)
+            call derivs(cs,P+d_P/2d0,S,y+dy1/2d0,dydP)
             dy2=dydP*d_P
-            call derivs(cs,P+dP/2d0,S,y+dy2/2d0,dydP)
+            call derivs(cs,P+d_P/2d0,S,y+dy2/2d0,dydP)
             dy3=dydP*d_P
-            call derivs(cs,P+dP,S,y+dy3,dydP)
+            call derivs(cs,P+d_P,S,y+dy3,dydP)
             dy4=dydP*d_P
             y=y+dy1/6.d0+dy2/3.d0+dy3/3.d0+dy4/6.d0
             P=P+d_P
@@ -361,11 +351,11 @@
             if (T<150.d0) then
                print *,"temp too low in integration"
                stop
-            endif
+            end if
 
             if (tau < 2.d0/3.d0) then
                exitnow=.true.
-            endif
+            end if
 
             if (exitnow) exit
 
@@ -401,7 +391,6 @@
       end subroutine PSerrfunc
 
 
-
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
@@ -411,7 +400,8 @@
 
       subroutine derivs(cs,P,S,y,dydP)
          type (create_star_info), pointer :: cs
-         real(dp) :: P,S,y(3),dydP(3)
+         real(dp), intent(in) :: P,S,y(3)
+         real(dp), intent(out) :: dydP(3)
          real(dp) :: r,m,T,rho,intdmT
 
          r=y(1)
@@ -423,7 +413,7 @@
          dydP(2)=-pi4*r*r*r*r/(G*m)
          dydP(3)=dydP(2)*T
 
-      end subroutine
+      end subroutine derivs
 
 
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -433,7 +423,8 @@
          use kap_def, only: num_kap_fracs
          use kap_lib
          type (create_star_info), pointer :: cs
-         real(dp) :: logrho,logT,kap
+         real(dp), intent(in) :: logrho,logT
+         real(dp), intent(out) :: kap
          real(dp) :: lnfree_e, d_lnfree_e_dlnRho, d_lnfree_e_dlnT
          real(dp) :: eta, d_eta_dlnRho, d_eta_dlnT
          real(dp) :: dlnkap_dlnRho, dlnkap_dlnT
@@ -445,7 +436,7 @@
          ! this ignores lnfree and eta
          lnfree_e=0; d_lnfree_e_dlnRho=0; d_lnfree_e_dlnT=0
          eta=0; d_eta_dlnRho=0; d_eta_dlnT=0
-         
+
          call kap_get( &
               kap_handle, species, chem_id, net_iso, xa, &
               logRho, logT, &
@@ -460,7 +451,7 @@
          if(ierr/=0) then
             write(*,*) 'kap_get failed'
             stop
-         endif
+         end if
 
       end subroutine get_kap_from_rhoT
 
@@ -473,7 +464,8 @@
          use eos_lib
          use eos_def
          type (create_star_info), pointer :: cs
-         real(dp) :: P,S,T,rho
+         real(dp), intent(in) :: P,S
+         real(dp), intent(out) :: T,rho
 
          real(dp) :: logT_result,log10Rho,dlnRho_dlnPgas_const_T,dlnRho_dlnT_const_Pgas
          real(dp), dimension(num_eos_basic_results) :: &
@@ -498,7 +490,7 @@
          if (ierr /=0) then
             print *,"failure in eosPT_get_T"
             stop
-         endif
+         end if
          T = exp10(logT_result)
 
     ! don't let T get below min temp. use to make a surface isotherm.
@@ -506,6 +498,4 @@
 
       end subroutine get_TRho_from_PS
 
-
       end module create_initial_model
-

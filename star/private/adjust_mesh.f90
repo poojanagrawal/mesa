@@ -2,31 +2,25 @@
 !
 !   Copyright (C) 2010-2019  The MESA Team
 !
-!   MESA is free software; you can use it and/or modify
-!   it under the combined terms and restrictions of the MESA MANIFESTO
-!   and the GNU General Library Public License as published
-!   by the Free Software Foundation; either version 2 of the License,
-!   or (at your option) any later version.
+!   This program is free software: you can redistribute it and/or modify
+!   it under the terms of the GNU Lesser General Public License
+!   as published by the Free Software Foundation,
+!   either version 3 of the License, or (at your option) any later version.
 !
-!   You should have received a copy of the MESA MANIFESTO along with
-!   this software; if not, it is available at the mesa website:
-!   http://mesa.sourceforge.net/
-!
-!   MESA is distributed in the hope that it will be useful,
+!   This program is distributed in the hope that it will be useful,
 !   but WITHOUT ANY WARRANTY; without even the implied warranty of
 !   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-!   See the GNU Library General Public License for more details.
+!   See the GNU Lesser General Public License for more details.
 !
-!   You should have received a copy of the GNU Library General Public License
-!   along with this software; if not, write to the Free Software
-!   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+!   You should have received a copy of the GNU Lesser General Public License
+!   along with this program. If not, see <https://www.gnu.org/licenses/>.
 !
 ! ***********************************************************************
 
       module adjust_mesh
 
       use star_private_def
-      use const_def
+      use const_def, only: dp, lsun
       use adjust_mesh_support
 
       implicit none
@@ -36,9 +30,7 @@
 
       logical, parameter :: dbg_remesh = .false.
 
-
       contains
-
 
       ! makes new mesh and sets new values for xh and xa.
       integer function remesh(s)
@@ -59,7 +51,7 @@
             num_gvals, j, cid, cid_max, unchanged, split, merged, revised
          type (star_info), target :: copy_info
          type (star_info), pointer :: c, prv
-         real(dp) :: delta_coeff, LH, sum_L_other, sum_L_other_limit, A_max, &
+         real(dp) :: delta_coeff, sum_L_other, sum_L_other_limit, A_max, &
             mesh_max_allowed_ratio, tmp, J_tot1, J_tot2, center_logT, alfa, beta, &
             d_dlnR00, d_dlnRp1, d_dv00, d_dvp1
          real(dp), pointer, dimension(:) :: &
@@ -71,12 +63,11 @@
          character (len=32) :: gval_names(max_allowed_gvals)
          logical, dimension(max_allowed_gvals) :: &
             gval_is_xa_function, gval_is_logT_function
-         logical :: changed_mesh
          logical, parameter :: dbg = .false.
 
          real(dp), parameter :: max_sum_abs = 10d0
          real(dp), parameter :: xsum_tol = 1d-2
-         real(dp), parameter :: h_cntr_limit = 0.5d0 ! for pre-MS decision
+         real(dp), parameter :: h_cntr_limit = 0.5d0  ! for pre-MS decision
 
          include 'formats'
 
@@ -95,7 +86,7 @@
             return
          end if
 
-         if (s% remesh_max_allowed_logT < 1d2) then ! check it
+         if (s% remesh_max_allowed_logT < 1d2) then  ! check it
             if (maxval(s% lnT(1:s% nz))/ln10 > s% remesh_max_allowed_logT) then
                if (dbg_remesh) write(*,2) &
                   's% remesh_max_allowed_logT', s% model_number, s% remesh_max_allowed_logT
@@ -322,7 +313,7 @@
             c = prv
          end if
 
-         prv = s ! this makes copies of pointers and scalars
+         prv = s  ! this makes copies of pointers and scalars
 
          if (dbg_remesh .or. dbg) write(*,*) 'call resize_star_info_arrays'
          call resize_star_info_arrays(s, c, ierr)
@@ -412,7 +403,7 @@
          call set_dm_bar(s, s% nz, s% dm, s% dm_bar)
 
          if (dbg_remesh) write(*,*) 'call do_mesh_adjust'
-         
+
          call do_mesh_adjust( &
             s, nz, nz_old, prv% xh, prv% xa, &
             prv% energy, prv% eta, prv% lnd, prv% lnPgas, &
@@ -528,7 +519,7 @@
          subroutine set_types_of_new_cells(cell_type, ierr)
             integer, pointer :: cell_type(:)
             integer, intent(out) :: ierr
-            integer :: k, k_old, k_old_prev, new_type
+            integer :: k, k_old, new_type
 
             include 'formats'
             ierr = 0
@@ -554,7 +545,7 @@
                   end if
                else if (k == nz_new) then
                   new_type = split_type
-               else ! k_old < nz_old .and. k < nz .and. xq_new(k) == xq_old(k_old)
+               else  ! k_old < nz_old .and. k < nz .and. xq_new(k) == xq_old(k_old)
                   if (xq_new(k+1) == xq_old(k_old+1)) then
                      new_type = unchanged_type
                   else if (xq_new(k+1) > xq_old(k_old+1)) then
@@ -612,8 +603,8 @@
             call return_integer_work_array(s, which_gval)
             call do_work_arrays1(.false., ierr)
          end subroutine do_dealloc1
-            
-            
+
+
          subroutine do_work_arrays1(alloc_flag, ierr)
             logical, intent(in) :: alloc_flag
             integer, intent(out) :: ierr
@@ -654,8 +645,8 @@
             if (ierr /= 0) return
             call return_logical_work_array(s, do_not_split)
          end subroutine do_dealloc2
-            
-            
+
+
          subroutine do_work_arrays2(alloc_flag, ierr)
             logical, intent(in) :: alloc_flag
             integer, intent(out) :: ierr
@@ -704,10 +695,6 @@
             call mesa_error(__FILE__,__LINE__,'debugging: end_dump remesh')
          end subroutine end_dump
 
-
       end function remesh
 
-
       end module adjust_mesh
-
-
