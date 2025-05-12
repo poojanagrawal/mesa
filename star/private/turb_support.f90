@@ -195,7 +195,7 @@ contains
       logical ::  test_partials, using_TDC
       logical, parameter :: report = .false.
       real(dp):: R0, A, u_tilda, k_tilda
-      real(dp):: tiny = 1d-12
+      real(dp):: tiny = 1d-8
       include 'formats'
 
       ! Pre-calculate some things. 
@@ -307,24 +307,29 @@ contains
          end if
 
          ! added by PA: modifications to MLT by Bessila et al. due to rotation or magnetic field
-
+            if (k>0) s% xtra4_array(k) = conv_vel% val
+            u_tilda = 1.d0
+            k_tilda = 1.d0
          ! check for convective mixing
          if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny) &
                .and. (trim(s% x_character_ctrl(1))/='') .and.(k>0)) then
-            u_tilda = 1.d0
-            k_tilda = 1.d0
+
             ! use modifications to mlt for rotation
             if (trim(s% x_character_ctrl(1))=='rotation') then
                !check for rotation
-               if (s% rotation_flag .and. (s% omega(k) > tiny)) then
+               ! if (s% rotation_flag .and. (s% omega(k) > tiny)) then
+               if (s% omega(k) .ge. tiny) then
+
                   !Convective rossby number 
                   R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)
+                  s% xtra3_array(k) = R0   
                   call rotating_MLT(R0, u_tilda, k_tilda)
-                  s% xtra3_array(k) = R0         
+                     
+                  ! print*, R0, u_tilda, k_tilda,k, s% nz
                endif
             ! use modifications to mlt for B field
             elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
-               if (s% rotation_flag) then
+               if (s% omega(k) .ge. tiny) then
                   ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
                   ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
                   ! inverse alfven number when B is given by magnetostrophy 
