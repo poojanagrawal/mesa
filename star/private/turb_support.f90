@@ -307,9 +307,16 @@ contains
          end if
 
          ! added by PA: modifications to MLT by Bessila et al. due to rotation or magnetic field
-            if (k>0) s% xtra4_array(k) = conv_vel% val
-            u_tilda = 1.d0
-            k_tilda = 1.d0
+         u_tilda = 1.d0
+         k_tilda = 1.d0
+      
+         ! save original values
+         if (k>0) then
+            s% xtra1_array(k) = u_tilda
+            s% xtra2_array(k) = k_tilda
+            s% xtra3_array(k) = 0.d0
+            s% xtra4_array(k) = conv_vel% val
+         endif
          ! check for convective mixing
          if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny) &
                .and. (trim(s% x_character_ctrl(1))/='') .and.(k>0)) then
@@ -320,15 +327,13 @@ contains
                ! if (s% rotation_flag .and. (s% omega(k) > tiny)) then
                if (s% omega(k) .ge. tiny) then
                   !Convective rossby number 
+
                   R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)
-                  if (r0/=r0) then
+                  if ((r0/=r0).or.(abs(r0) > huge(r0))) then
                   print*, 'nan r0', k, conv_vel% val, s% omega(k)
                   endif
-
                   s% xtra3_array(k) = R0   
-                  call rotating_MLT(R0, u_tilda, k_tilda)
-                     
-                  ! print*, R0, u_tilda, k_tilda,k, s% nz
+                  call rotating_MLT(R0, u_tilda, k_tilda)                     
                endif
             ! use modifications to mlt for B field
             elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
@@ -353,7 +358,6 @@ contains
 
             s% xtra1_array(k) = u_tilda
             s% xtra2_array(k) = k_tilda
-            s% xtra4_array(k) = conv_vel% val
             Lambda = Lambda% val/k_tilda
             
             ! Re-Initialize no mixing
