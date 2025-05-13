@@ -319,9 +319,12 @@ contains
                !check for rotation
                ! if (s% rotation_flag .and. (s% omega(k) > tiny)) then
                if (s% omega(k) .ge. tiny) then
-
                   !Convective rossby number 
                   R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)
+                  if (r0/=r0) then
+                  print*, 'nan r0', k, conv_vel% val, s% omega(k)
+                  endif
+
                   s% xtra3_array(k) = R0   
                   call rotating_MLT(R0, u_tilda, k_tilda)
                      
@@ -350,7 +353,7 @@ contains
 
             s% xtra1_array(k) = u_tilda
             s% xtra2_array(k) = k_tilda
-            s% xtra4_array(k) = conv_vel% val* u_tilda 
+            s% xtra4_array(k) = conv_vel% val
             Lambda = Lambda% val/k_tilda
             
             ! Re-Initialize no mixing
