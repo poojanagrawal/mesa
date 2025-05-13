@@ -321,22 +321,23 @@ contains
          if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny) &
                .and. (trim(s% x_character_ctrl(1))/='') .and.(k>0)) then
 
-            ! use modifications to mlt for rotation
             if (trim(s% x_character_ctrl(1))=='rotation') then
-               !check for rotation
+               ! use modifications to mlt for rotation
+               !check for rotation first
                ! if (s% rotation_flag .and. (s% omega(k) > tiny)) then
                if (s% omega(k) .ge. tiny) then
                   !Convective rossby number 
-
                   R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)
-                  if ((r0/=r0).or.(abs(r0) > huge(r0))) then
-                  print*, 'nan r0', k, conv_vel% val, s% omega(k)
+                  call rotating_MLT(R0, u_tilda, k_tilda, ierr)   
+                  if (ierr /= 0) then 
+                     print *, "Newton's method gave unphysical root", R0, pi
+                     print*, 'nan r0', k, conv_vel% val, s% omega(k),s% rotation_flag
+                     return
                   endif
-                  s% xtra3_array(k) = R0   
-                  call rotating_MLT(R0, u_tilda, k_tilda)                     
+                  s% xtra3_array(k) = R0 
                endif
-            ! use modifications to mlt for B field
             elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
+               ! use modifications to mlt for B field
                if (s% omega(k) .ge. tiny) then
                   ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
                   ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
@@ -353,7 +354,8 @@ contains
             else
                print*, 'invalid vaue for x_character_ctrl(1)'
                print*, 'choose between rotation and magnetic_field'
-               STOP
+               ierr = -1
+               return
             end if
 
             s% xtra1_array(k) = u_tilda
@@ -510,11 +512,13 @@ contains
          end if
       end
 
-      subroutine rotating_MLT(R0,u_tilda, k_tilda)
+      subroutine rotating_MLT(R0,u_tilda, k_tilda, ierr1)
          real(dp), intent(in) :: R0
          real(dp), intent(out) :: u_tilda, k_tilda
+         integer, intent(out) :: ierr1
          real(dp) :: var_s, c, z, z0, sqrt_z
 
+         ierr1 = 0
          var_s = 0.5707277056455107       !s = 2**(1/3)* 3**(1/2) * 5**(-5/6)
          c = 18/(25*pi*pi*R0*R0*var_s*var_s)      ! value at pole
          z0 = 1.357208808297453     !(2/5)**(-1/3)
@@ -524,7 +528,9 @@ contains
          if (z>0.d0) then
             sqrt_z = sqrt(z)
             u_tilda = 2.041241452319315* var_s/sqrt_z
-            k_tilda = 0.6324555320336759*(sqrt_z**3)  
+            k_tilda = 0.6324555320336759*(sqrt_z**3) 
+         else
+            ierr1 = -1
          endif
         
       end subroutine
@@ -553,10 +559,8 @@ contains
                z = z_new
          end do
 
-         print *, "Newton's method did not converge.", z, initial_guess,c
          !assigning error value
          newton_for_rot = -1.d0
-         stop 0
       end function 
         
       subroutine magnetic_MLT(A, uB_tilda, kB_tilda)
