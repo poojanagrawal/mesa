@@ -326,12 +326,9 @@ contains
                if (trim(s% x_character_ctrl(1))=='rotation') then
                   ! use modifications to mlt for rotation
                   !check for rotation first
-                  ! if (s% rotation_flag .and. (s% omega(k) > tiny)) then
-                  if (s% omega(k) > tiny) then
+                  if (s% rotation_flag .and. (s% omega(k) > tiny)) then
                      !Convective rossby number 
-                     R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)
-                     ! print*, 'r0,conv_vel,omega,k',r0,conv_vel% val, s% omega(k),k
-                     
+                     R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)                     
                      if (R0>tiny) call rotating_MLT(R0, u_tilda, k_tilda, ierr)   
                      if (ierr /= 0) then 
                         print *, "Newton's method gave unphysical root", R0, conv_vel% val, s% omega(k),k
@@ -355,7 +352,7 @@ contains
                   s% xtra3_array(k) = A
                   call magnetic_MLT(A, u_tilda, k_tilda)
                else
-                  print*, 'invalid vaue for x_character_ctrl(1)'
+                  print*, 'invalid vaue for x_character_ctrl(2)'
                   print*, 'choose between rotation and magnetic_field'
                   ierr = -1
                   return
