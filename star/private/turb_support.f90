@@ -112,7 +112,7 @@ contains
       type (star_info), pointer :: s
       integer, intent(in) :: k
       character (len=*), intent(in) :: MLT_option
-      type(auto_diff_real_star_order1), intent(in) :: gradr_in, grada, scale_height
+      type(auto_diff_real_star_order1), intent(in) :: gradr_in, grada!, scale_height
       real(dp), intent(in) :: gradL_composition_term, mixing_length_alpha
       integer, intent(out) :: mixing_type
       type(auto_diff_real_star_order1), intent(out) :: &
@@ -121,7 +121,7 @@ contains
               
       real(dp) :: cgrav, m, XH1, gradL_old, grada_face_old
       integer :: iso, old_mix_type
-      type(auto_diff_real_star_order1) :: gradr, r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp
+      type(auto_diff_real_star_order1) :: gradr, r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp,scale_height
       include 'formats'
       ierr = 0
 
@@ -174,7 +174,7 @@ contains
       integer, intent(in) :: k
       character (len=*), intent(in) :: MLT_option
       type(auto_diff_real_star_order1), intent(in) :: &
-         r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp, gradr, grada, scale_height
+         r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp, gradr, grada!, scale_height
       integer, intent(in) :: iso
       real(dp), intent(in) :: &
          XH1, cgrav, m, gradL_composition_term, &
@@ -183,7 +183,7 @@ contains
       type(auto_diff_real_star_order1), intent(out) :: gradT, Y_face, conv_vel, D, Gamma
       integer, intent(out) :: ierr
       
-      type(auto_diff_real_star_order1) :: Pr, Pg, grav, Lambda, gradL, beta
+      type(auto_diff_real_star_order1) :: Pr, Pg, grav, Lambda, gradL, beta, scale_height
       real(dp) :: conv_vel_start, scale
 
       ! these are used by use_superad_reduction
@@ -314,12 +314,12 @@ contains
             k_tilda = 1.d0
 
             ! save original values
-            s% xtra1_array(k) = u_tilda
-            s% xtra2_array(k) = k_tilda
-            s% xtra3_array(k) = 0.d0
-            s% xtra4_array(k) = conv_vel% val
-            s% xtra5_array(k) = conv_vel% val
-         
+            s% xtra1_array(k) = conv_vel% val
+            s% xtra2_array(k) = conv_vel% val
+            s% xtra3_array(k) = u_tilda
+            s% xtra4_array(k) = k_tilda
+            s% xtra5_array(k) = 0.d0
+
             if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny) &
                   .and. (trim(s% x_character_ctrl(1))/='')) then
 
@@ -334,7 +334,7 @@ contains
                         print *, "Newton's method gave unphysical root", R0, conv_vel% val, s% omega(k),k
                         return
                      endif
-                     s% xtra3_array(k) = R0 
+                     s% xtra5_array(k) = R0 
                   endif
                elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
                   ! use modifications to mlt for B field
@@ -349,7 +349,7 @@ contains
                      ! inverse alfven number 
                      A = s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
                   endif
-                  s% xtra3_array(k) = A
+                  s% xtra5_array(k) = A
                   call magnetic_MLT(A, u_tilda, k_tilda)
                else
                   print*, 'invalid vaue for x_character_ctrl(2)'
@@ -359,8 +359,9 @@ contains
                end if
 
                if (abs(k_tilda-1.d0)>tiny) then
-                  s% xtra1_array(k) = u_tilda
-                  s% xtra2_array(k) = k_tilda
+                  s% xtra3_array(k) = u_tilda
+                  s% xtra4_array(k) = k_tilda
+                  scale_height = scale_height/k_tilda
                   Lambda = Lambda% val/k_tilda
                   
                   ! Re-Initialize no mixing
@@ -376,7 +377,7 @@ contains
                               gradr, grada, gradL, &
                               Gamma, gradT, Y_face, conv_vel, D, mixing_type, ierr)
 
-                  s% xtra5_array(k) = conv_vel% val
+                  s% xtra2_array(k) = conv_vel% val
                   ! conv vel from mod MLT
                   ! conv_vel = conv_vel0 * u_tilda
                   ! D = conv_vel% val *Lambda% val/3d0    ! diffusion coefficient [cm^2/sec]
