@@ -457,6 +457,7 @@ contains
          if ((mixing_type==convective_mixing) .and.(conv_vel% val > tiny)) then
             u_tilda = 1.d0
             k_tilda = 1.d0
+            e_tilda = 1.d0
             Lambda = mixing_length_alpha*scale_height
             if (trim(s% x_character_ctrl(1))=='rotation') then
                ! use modifications to mlt for rotation
@@ -469,7 +470,7 @@ contains
                      print *, "Newton's method gave unphysical root", R0, conv_vel% val, s% omega(k),k
                      return
                   endif
-                  s% xtra5_array(k) = R0 
+                  s% xtra6_array(k) = R0 
                endif
             elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
                ! use modifications to mlt for B field
@@ -485,7 +486,7 @@ contains
                   A = 1.0_dp 
                   
                endif
-               s% xtra5_array(k) = A
+               s% xtra6_array(k) = A
                call magnetic_MLT(A, u_tilda, k_tilda)
             ! else
             !    print*, 'invalid vaue for x_character_ctrl(2)'
@@ -495,25 +496,17 @@ contains
             end if
             s% xtra3_array(k) = u_tilda
             s% xtra4_array(k) = k_tilda
-
+            s% xtra5_array(k) = e_tilda
             if (abs(k_tilda-1.d0)>tiny) then
             ! modify scale height as it is used in calculation outside
                scale_height = scale_height/k_tilda    
 
                ! conv vel from mod MLT
-               conv_vel = conv_vel% val * u_tilda
+               conv_vel% val = conv_vel% val * u_tilda
                Lambda% val = Lambda% val/k_tilda
-               D = conv_vel% val*Lambda% val/3d0    ! diffusion coefficient [cm^2/sec]
-               if (conv_vel% val > 0d0) then
-                  mixing_type = convective_mixing
-               else
-                  mixing_type = no_mixing
-               end if
-
+               D = conv_vel*Lambda/3d0    ! diffusion coefficient [cm^2/sec]
                !! @param Y_face The superadiabaticity (dlnT/dlnP - grada, output).
-               
-               Y_face = Y_face*e_tilda
-
+               Y_face = Y_face * e_tilda
                if (s% use_Ledoux_criterion) then
                   gradL = grada + gradL_composition_term ! Ledoux temperature gradient
                else
