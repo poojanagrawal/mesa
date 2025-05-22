@@ -159,7 +159,16 @@ contains
             iso, XH1, cgrav, m, gradL_composition_term, mixing_length_alpha, &
             s% alpha_semiconvection, s% thermohaline_coeff, &
             mixing_type, gradT, Y_face, mlt_vc, D, Gamma, ierr)
+         
       end if
+      s% xtra1_array(k) = mlt_vc% val
+      s% xtra6_array(k) = mixing_length_alpha * scale_height% val
+      if (trim(s% x_character_ctrl(1))/='') then
+         call modify_MLT_vars(s, k,  &
+         T, opacity, rho, Cp, grada, scale_height, &
+         gradL_composition_term, mixing_length_alpha, &
+         mixing_type, gradT, Y_face, mlt_vc, D, Gamma, ierr)
+      endif
 
    end subroutine do1_mlt_eval
 
@@ -174,7 +183,7 @@ contains
       integer, intent(in) :: k
       character (len=*), intent(in) :: MLT_option
       type(auto_diff_real_star_order1), intent(in) :: &
-         r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp, gradr, grada!, scale_height
+         r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp, gradr, grada, scale_height
       integer, intent(in) :: iso
       real(dp), intent(in) :: &
          XH1, cgrav, m, gradL_composition_term, &
@@ -183,7 +192,7 @@ contains
       type(auto_diff_real_star_order1), intent(out) :: gradT, Y_face, conv_vel, D, Gamma
       integer, intent(out) :: ierr
       
-      type(auto_diff_real_star_order1) :: Pr, Pg, grav, Lambda, gradL, beta, scale_height
+      type(auto_diff_real_star_order1) :: Pr, Pg, grav, Lambda, gradL, beta
       real(dp) :: conv_vel_start, scale
 
       ! these are used by use_superad_reduction
@@ -194,8 +203,6 @@ contains
       character (len=256) :: message        
       logical ::  test_partials, using_TDC
       logical, parameter :: report = .false.
-      real(dp):: R0, A, u_tilda, k_tilda
-      real(dp):: tiny = 1d-8
       include 'formats'
 
       ! Pre-calculate some things. 
@@ -306,96 +313,6 @@ contains
             return
          end if
 
-         ! added by PA: modifications to MLT by Bessila et al. due to rotation or magnetic field
-
-      
-         if (k>0) then
-            u_tilda = 1.d0
-            k_tilda = 1.d0
-
-            ! save original values
-            s% xtra1_array(k) = conv_vel% val
-            s% xtra2_array(k) = conv_vel% val
-            s% xtra3_array(k) = u_tilda
-            s% xtra4_array(k) = k_tilda
-            s% xtra5_array(k) = 0.d0
-
-            if ((mixing_type == convective_mixing) .and. (conv_vel% val > tiny) &
-                  .and. (trim(s% x_character_ctrl(1))/='')) then
-
-               if (trim(s% x_character_ctrl(1))=='rotation') then
-                  ! use modifications to mlt for rotation
-                  !check for rotation first
-                  if (s% rotation_flag .and. (s% omega(k) > tiny)) then
-                     !Convective rossby number 
-                     R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)                     
-                     if (R0>tiny) call rotating_MLT(R0, u_tilda, k_tilda, ierr)   
-                     if (ierr /= 0) then 
-                        print *, "Newton's method gave unphysical root", R0, conv_vel% val, s% omega(k),k
-                        return
-                     endif
-                     s% xtra5_array(k) = R0 
-                  endif
-               elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
-                  ! use modifications to mlt for B field
-                  if (s% omega(k) .ge. tiny) then
-                     ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
-                     ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
-                     ! inverse alfven number when B is given by magnetostrophy 
-                     ! https://doi.org/10.1051/0004-6361/201936477
-
-                     A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
-                  else
-                     ! inverse alfven number 
-                     A = s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
-                  endif
-                  s% xtra5_array(k) = A
-                  call magnetic_MLT(A, u_tilda, k_tilda)
-               else
-                  print*, 'invalid vaue for x_character_ctrl(2)'
-                  print*, 'choose between rotation and magnetic_field'
-                  ierr = -1
-                  return
-               end if
-
-               if (abs(k_tilda-1.d0)>tiny) then
-                  s% xtra3_array(k) = u_tilda
-                  s% xtra4_array(k) = k_tilda
-                  scale_height = scale_height/k_tilda
-                  Lambda = Lambda% val/k_tilda
-                  
-                  ! Re-Initialize no mixing
-                  mixing_type = no_mixing
-                  gradT = gradr
-                  Y_face = gradT - gradL
-                  conv_vel = 0d0
-                  D = 0d0
-                  Gamma = 0d0  
-
-                  call set_MLT(MLT_option, mixing_length_alpha, s% Henyey_MLT_nu_param, s% Henyey_MLT_y_param, &
-                              chiT, chiRho, Cp, grav, Lambda, rho, P, T, opacity, &
-                              gradr, grada, gradL, &
-                              Gamma, gradT, Y_face, conv_vel, D, mixing_type, ierr)
-
-                  s% xtra2_array(k) = conv_vel% val
-                  ! conv vel from mod MLT
-                  ! conv_vel = conv_vel0 * u_tilda
-                  ! D = conv_vel% val *Lambda% val/3d0    ! diffusion coefficient [cm^2/sec]
-                  ! if (conv_vel% val > 0d0) then
-                  !    mixing_type = convective_mixing
-                  ! else
-                  !    mixing_type = no_mixing
-                  ! end if
-
-                  ! Unpack output
-                  !! @param Y_face The superadiabaticity (dlnT/dlnP - grada, output).
-
-                  ! gradT = Y_face + gradL
-                  ! D = conv_vel*scale_height*mixing_length_alpha/3d0     ! diffusion coefficient [cm^2/sec]
-               endif
-            endif
-         endif
-         ! check for convective mixing
          ! Experimental method to lower superadiabaticity. Call MLT again with an artificially reduced
          ! gradr if the resulting gradT would lead to the radiative luminosity approaching the Eddington
          ! limit, or when a density inversion is expected to happen.
@@ -449,7 +366,6 @@ contains
          D = 0d0
          Gamma = 0d0
       end if
-
       contains
 
       subroutine set_superad_reduction()
@@ -514,16 +430,114 @@ contains
             gradr_scaled = grad_scale*gradr
          end if
       end
+   end subroutine Get_results
 
-      subroutine rotating_MLT(R0,u_tilda, k_tilda, ierr1)
+   ! added by PA: modifications to MLT by Bessila et al. due to rotation and/or magnetic field
+   subroutine modify_MLT_vars(s, k,  &
+         T, opacity, rho, Cp, grada, scale_height, &
+         gradL_composition_term, mixing_length_alpha, &
+         mixing_type, gradT, Y_face, conv_vel, D, Gamma, ierr)
+
+      use star_utils
+      type (star_info), pointer :: s
+      integer, intent(in) :: k
+      type(auto_diff_real_star_order1), intent(in) :: T, opacity, rho, Cp, grada
+      real(dp), intent(in) :: gradL_composition_term, mixing_length_alpha
+      integer, intent(out) :: mixing_type
+      type(auto_diff_real_star_order1), intent(out) :: gradT, Y_face, conv_vel, D, Gamma, scale_height
+      type(auto_diff_real_star_order1) :: Lambda, gradL
+      integer, intent(out) :: ierr
+      
+      logical, parameter :: report = .false.
+      real(dp):: R0, A, u_tilda, k_tilda, e_tilda
+      real(dp):: tiny = 1d-8
+      include 'formats'
+
+         ! check for convective mixing
+         if ((mixing_type==convective_mixing) .and.(conv_vel% val > tiny)) then
+            u_tilda = 1.d0
+            k_tilda = 1.d0
+            Lambda = mixing_length_alpha*scale_height
+            if (trim(s% x_character_ctrl(1))=='rotation') then
+               ! use modifications to mlt for rotation
+               !check for rotation first
+               if (s% rotation_flag .and. (s% omega(k) > tiny)) then
+                  !Convective rossby number 
+                  R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)                     
+                  if (R0>tiny) call rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr)   
+                  if (ierr /= 0) then 
+                     print *, "Newton's method gave unphysical root", R0, conv_vel% val, s% omega(k),k
+                     return
+                  endif
+                  s% xtra5_array(k) = R0 
+               endif
+            elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
+               ! use modifications to mlt for B field
+               if (s% rotation_flag .and. (s% omega(k) > tiny)) then
+                  ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
+                  ! inverse alfven number when B is given by magnetostrophy (Astoul et al. 2019)
+
+                  A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
+               else
+                  ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
+                  ! inverse alfven number 
+                  !s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
+                  A = 1.0_dp 
+                  
+               endif
+               s% xtra5_array(k) = A
+               call magnetic_MLT(A, u_tilda, k_tilda)
+            ! else
+            !    print*, 'invalid vaue for x_character_ctrl(2)'
+            !    print*, 'choose between rotation and magnetic_field'
+            !    ierr = -1
+            !    return
+            end if
+            s% xtra3_array(k) = u_tilda
+            s% xtra4_array(k) = k_tilda
+
+            if (abs(k_tilda-1.d0)>tiny) then
+            ! modify scale height as it is used in calculation outside
+               scale_height = scale_height/k_tilda    
+
+               ! conv vel from mod MLT
+               conv_vel = conv_vel% val * u_tilda
+               Lambda% val = Lambda% val/k_tilda
+               D = conv_vel% val*Lambda% val/3d0    ! diffusion coefficient [cm^2/sec]
+               if (conv_vel% val > 0d0) then
+                  mixing_type = convective_mixing
+               else
+                  mixing_type = no_mixing
+               end if
+
+               !! @param Y_face The superadiabaticity (dlnT/dlnP - grada, output).
+               
+               Y_face = Y_face*e_tilda
+
+               if (s% use_Ledoux_criterion) then
+                  gradL = grada + gradL_composition_term ! Ledoux temperature gradient
+               else
+                  gradL = grada
+               end if
+               gradT = Y_face + gradL
+               !  convective efficiency, Gamma from C&G 14.39
+               Gamma= Cp*opacity*pow2(rho) * conv_vel* Lambda/(6*crad*clight*pow3(T))
+            endif
+         endif
+         s% xtra2_array(k) = conv_vel% val
+      contains 
+
+      subroutine rotating_MLT(R0,u_tilda, k_tilda, e_tilda,ierr1)
          real(dp), intent(in) :: R0
-         real(dp), intent(out) :: u_tilda, k_tilda
+         real(dp), intent(out) :: u_tilda, k_tilda,e_tilda
          integer, intent(out) :: ierr1
-         real(dp) :: var_s, c, z, z0, sqrt_z
+         real(dp) :: var_s, c, c0, z, z0, sqrt_z
 
-         ierr1 = 0
+         !the following computation assume value at pole, theta=0
+         ierr1 = -1
          var_s = 0.5707277056455107       !s = 2**(1/3)* 3**(1/2) * 5**(-5/6)
-         c = 18/(25*pi*pi*R0*R0*var_s*var_s)      ! value at pole
+         c0 = pow2(5*pi*R0)
+         c = c0*pow2(var_s) 
          z0 = 1.357208808297453     !(2/5)**(-1/3)
 
          ! Call Newton's method
@@ -532,8 +546,8 @@ contains
             sqrt_z = sqrt(z)
             u_tilda = 2.041241452319315* var_s/sqrt_z
             k_tilda = 0.6324555320336759*(sqrt_z**3) 
-         else
-            ierr1 = -1
+            e_tilda = (c*(z**5)+6)/(c0*(pow3(z)-1))
+            ierr1 = 0
          endif
         
       end subroutine
@@ -546,24 +560,20 @@ contains
          real(dp) :: z, z_new, f, f_prime
          integer :: i
 
-         z = initial_guess
-
-         do i = 1, max_iter
-            ! Function to compute f(z) - Eq. 46 from Augustson & Mathis (2019)
-            f = 2.0d0*z**5 - 5.0d0*z**2 - c
-            ! Function to compute the derivative
-            f_prime = 10.0d0*z**4 - 10.0d0*z
-
-               z_new = z - f / f_prime
-               if (abs(z_new - z) < tol) then
-                  newton_for_rot = z_new
-                  return
-               end if
-               z = z_new
-         end do
-
-         !assigning error value
          newton_for_rot = -1.d0
+         z = initial_guess
+         do i = 1, max_iter
+            ! Eq. 46 from Augustson & Mathis (2019)
+            f = 2.0d0*z**5 - 5.0d0*z**2 - (18/c)
+            f_prime = 10.0d0*z**4 - 10.0d0*z
+            z_new = z - f / f_prime
+            if (abs(z_new - z) < tol) then
+               newton_for_rot = z_new
+               return
+            end if
+            z = z_new
+         end do
+         
       end function 
         
       subroutine magnetic_MLT(A, uB_tilda, kB_tilda)
@@ -610,7 +620,5 @@ contains
          power_series = sum
 
       end function
-   end subroutine Get_results
-
-
+   end subroutine modify_MLT_vars 
 end module turb_support
