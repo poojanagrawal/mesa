@@ -37,7 +37,7 @@ use turb
 implicit none
 
 private
-public :: get_gradT, do1_mlt_eval, Get_results
+public :: get_gradT, do1_mlt_eval, Get_results,modify_MLT_vars
 
 contains
 
@@ -112,7 +112,7 @@ contains
       type (star_info), pointer :: s
       integer, intent(in) :: k
       character (len=*), intent(in) :: MLT_option
-      type(auto_diff_real_star_order1), intent(in) :: gradr_in, grada!, scale_height
+      type(auto_diff_real_star_order1), intent(in) :: gradr_in, grada, scale_height
       real(dp), intent(in) :: gradL_composition_term, mixing_length_alpha
       integer, intent(out) :: mixing_type
       type(auto_diff_real_star_order1), intent(out) :: &
@@ -121,7 +121,7 @@ contains
               
       real(dp) :: cgrav, m, XH1, gradL_old, grada_face_old
       integer :: iso, old_mix_type
-      type(auto_diff_real_star_order1) :: gradr, r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp,scale_height
+      type(auto_diff_real_star_order1) :: gradr, r, L, T, P, opacity, rho, dV, chiRho, chiT, Cp
       include 'formats'
       ierr = 0
 
@@ -161,15 +161,6 @@ contains
             mixing_type, gradT, Y_face, mlt_vc, D, Gamma, ierr)
          
       end if
-      s% xtra1_array(k) = mlt_vc% val
-      s% xtra6_array(k) = mixing_length_alpha * scale_height% val
-      if (trim(s% x_character_ctrl(1))/='') then
-         call modify_MLT_vars(s, k,  &
-         T, opacity, rho, Cp, grada, scale_height, &
-         gradL_composition_term, mixing_length_alpha, &
-         mixing_type, gradT, Y_face, mlt_vc, D, Gamma, ierr)
-      endif
-
    end subroutine do1_mlt_eval
 
 
@@ -434,34 +425,33 @@ contains
 
    ! added by PA: modifications to MLT by Bessila et al. due to rotation and/or magnetic field
    subroutine modify_MLT_vars(s, k,  &
-         T, opacity, rho, Cp, grada, scale_height, &
-         gradL_composition_term, mixing_length_alpha, &
-         mixing_type, gradT, Y_face, conv_vel, D, Gamma, ierr)
+        gradL_composition_term, grada,  &
+          scale_height, mixing_length_alpha, &
+         mixing_type, gradT, Y_face, conv_vel, D, Gamma, k_tilda, ierr)
 
       use star_utils
       type (star_info), pointer :: s
       integer, intent(in) :: k
-      type(auto_diff_real_star_order1), intent(in) :: T, opacity, rho, Cp, grada
+      type(auto_diff_real_star_order1), intent(in) :: grada, scale_height
       real(dp), intent(in) :: gradL_composition_term, mixing_length_alpha
-      integer, intent(out) :: mixing_type
-      type(auto_diff_real_star_order1), intent(out) :: gradT, Y_face, conv_vel, D, Gamma, scale_height
-      type(auto_diff_real_star_order1) :: Lambda, gradL
+      integer, intent(in) :: mixing_type
+      type(auto_diff_real_star_order1) :: gradT, Y_face, conv_vel, D, Gamma
+      type(auto_diff_real_star_order1) :: Lambda, gradL, opacity, rho, Cp, T
       integer, intent(out) :: ierr
       
       logical, parameter :: report = .false.
       real(dp):: R0, A, u_tilda, k_tilda, e_tilda
       real(dp):: tiny = 1d-8
       include 'formats'
-
+         u_tilda = 1.d0
+         k_tilda = 1.d0
+         e_tilda = 1.d0
          ! check for convective mixing
          if ((mixing_type==convective_mixing) .and.(conv_vel% val > tiny)) then
-            u_tilda = 1.d0
-            k_tilda = 1.d0
-            e_tilda = 1.d0
             Lambda = mixing_length_alpha*scale_height
             if (trim(s% x_character_ctrl(1))=='rotation') then
                ! use modifications to mlt for rotation
-               !check for rotation first
+               ! check for rotation first
                if (s% rotation_flag .and. (s% omega(k) > tiny)) then
                   !Convective rossby number 
                   R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)                     
@@ -477,30 +467,17 @@ contains
                if (s% rotation_flag .and. (s% omega(k) > tiny)) then
                   ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
                   ! inverse alfven number when B is given by magnetostrophy (Astoul et al. 2019)
-
                   A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
                else
                   ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
                   ! inverse alfven number 
                   !s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
                   A = 1.0_dp 
-                  
                endif
-               s% xtra6_array(k) = A
                call magnetic_MLT(A, u_tilda, k_tilda)
-            ! else
-            !    print*, 'invalid vaue for x_character_ctrl(2)'
-            !    print*, 'choose between rotation and magnetic_field'
-            !    ierr = -1
-            !    return
+               s% xtra6_array(k) = A
             end if
-            s% xtra3_array(k) = u_tilda
-            s% xtra4_array(k) = k_tilda
-            s% xtra5_array(k) = e_tilda
             if (abs(k_tilda-1.d0)>tiny) then
-            ! modify scale height as it is used in calculation outside
-               scale_height = scale_height/k_tilda    
-
                ! conv vel from mod MLT
                conv_vel% val = conv_vel% val * u_tilda
                Lambda% val = Lambda% val/k_tilda
@@ -514,10 +491,16 @@ contains
                end if
                gradT = Y_face + gradL
                !  convective efficiency, Gamma from C&G 14.39
-               Gamma= Cp*opacity*pow2(rho) * conv_vel* Lambda/(6*crad*clight*pow3(T))
+               T = get_T_face(s,k)
+               opacity = get_kap_face(s,k)
+               rho = get_Rho_face(s,k)
+               Cp = get_Cp_face(s,k)
+               Gamma = Cp*opacity*pow2(rho)*conv_vel*Lambda/(6*crad*clight*pow3(T))
             endif
          endif
-         s% xtra2_array(k) = conv_vel% val
+         s% xtra3_array(k) = u_tilda
+         s% xtra4_array(k) = k_tilda
+         s% xtra5_array(k) = e_tilda
       contains 
 
       subroutine rotating_MLT(R0,u_tilda, k_tilda, e_tilda,ierr1)

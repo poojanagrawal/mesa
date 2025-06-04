@@ -81,7 +81,7 @@
             mixing_length_alpha_in, gradL_composition_term_in)
          ! get convection info for point k
          use star_utils
-         use turb_support, only: do1_mlt_eval
+         use turb_support, only: do1_mlt_eval, modify_MLT_vars
          use eos_def
          use chem_def, only: ih1
          use auto_diff_support
@@ -98,7 +98,7 @@
          real(dp), pointer :: vel(:)
          integer :: i, mixing_type, h1, nz, k_T_max
          real(dp), parameter :: conv_vel_mach_limit = 0.9d0
-         real(dp) :: crystal_pad
+         real(dp) :: crystal_pad, k_tilda
          logical :: no_mix
          type(auto_diff_real_star_order1) :: &
             grada_face_ad, scale_height_ad, gradr_ad, rho_face_ad, &
@@ -243,7 +243,20 @@
             return
          end if
          
+         s% xtra1_array(k) = mlt_vc_ad% val
+         k_tilda = 1.d0 
+         if (trim(s% x_character_ctrl(1))/='') then
+            call modify_MLT_vars(s, k,  &
+            gradL_composition_term,grada_face_ad,  &
+            scale_height_ad, mixing_length_alpha, &
+            mixing_type, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, Gamma_ad, k_tilda, ierr)
+         endif
+         s% xtra2_array(k) = mlt_vc_ad% val
+
          call store_results
+
+         s% Lambda_ad(k) = s% Lambda_ad(k)/k_tilda
+         s% mlt_mixing_length(k) = s% Lambda_ad(k)%val/k_tilda 
 
          if (s% mlt_gradT_fraction >= 0d0 .and. s% mlt_gradT_fraction <= 1d0) then
             f = s% mlt_gradT_fraction
