@@ -441,19 +441,19 @@ contains
       
       logical, parameter :: report = .false.
       real(dp):: R0, A, u_tilda, k_tilda, e_tilda
-      real(dp):: tiny = 1d-8
+      real(dp):: tiny = 1d-12
       include 'formats'
          u_tilda = 1.d0
          k_tilda = 1.d0
          e_tilda = 1.d0
-         ! check for convective mixing
-         if ((mixing_type==convective_mixing) .and.(conv_vel% val > tiny)) then
+         ! Check for convective mixing
+         if ((mixing_type == convective_mixing) .and.(conv_vel% val > tiny)) then
             Lambda = mixing_length_alpha*scale_height
             if (trim(s% x_character_ctrl(1))=='rotation') then
                ! use modifications to mlt for rotation
                ! check for rotation first
                if (s% rotation_flag .and. (s% omega(k) > tiny)) then
-                  !Convective rossby number 
+                  ! Convective rossby number 
                   R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)                     
                   if (R0>tiny) call rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr)   
                   if (ierr /= 0) then 
@@ -462,20 +462,23 @@ contains
                   endif
                   s% xtra6_array(k) = R0 
                endif
-            elseif (trim(s% x_character_ctrl(1))=='magnetic_field') then
-               ! use modifications to mlt for B field
-               if (s% rotation_flag .and. (s% omega(k) > tiny)) then
-                  ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
-                  ! inverse alfven number when B is given by magnetostrophy (Astoul et al. 2019)
-                  A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
-               else
+            elseif (trim(s% x_character_ctrl(1))=='magnetic_iso') then
+                  if (s% rotation_flag .and. (s% omega(k) > tiny)) then
+                     ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
+                     ! modifications to mlt for B field when B is given by magnetostrophy (Astoul et al. 2019)
+                     ! A is the inverse alfven number
+
+                     A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
+                     call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
+                     s% xtra6_array(k) = A
+                  endif
+             elseif (trim(s% x_character_ctrl(1))=='magnetic_eqp') then
                   ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
-                  ! inverse alfven number 
-                  !s% x_ctrl(1) /(conv_vel% val*SQRT(rho% val))  ! mu_0 = 1 in cgs units
-                  A = 1.0_dp 
-               endif
-               call magnetic_MLT(A, u_tilda, k_tilda)
-               s% xtra6_array(k) = A
+                  ! modifications to mlt for B field when B is given by Equipartition
+                  ! A is the inverse alfven number 
+                  A = 1.d0
+                  call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
+                  s% xtra6_array(k) = A
             end if
             if (abs(k_tilda-1.d0)>tiny) then
                ! conv vel from mod MLT
@@ -503,7 +506,7 @@ contains
          s% xtra5_array(k) = e_tilda
       contains 
 
-      subroutine rotating_MLT(R0,u_tilda, k_tilda, e_tilda,ierr1)
+      subroutine rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr1)
          real(dp), intent(in) :: R0
          real(dp), intent(out) :: u_tilda, k_tilda,e_tilda
          integer, intent(out) :: ierr1
@@ -526,7 +529,7 @@ contains
             ierr1 = 0
          endif
         
-      end subroutine
+      end subroutine rotating_MLT
 
       ! Newton's method for root finding
       real(dp) function newton_for_rot(c, initial_guess)
@@ -550,51 +553,81 @@ contains
             z = z_new
          end do
          
-      end function 
+      end function newton_for_rot
         
-      subroutine magnetic_MLT(A, uB_tilda, kB_tilda)
+      subroutine magnetic_MLT(A, uB_tilda, kB_tilda, eB_tilda)
          real(dp), intent(in):: A
-         real(dp), intent(out):: uB_tilda, kB_tilda
-         real(dp) :: a_coeff(0:12), b_coeff(0:12)
+         real(dp), intent(out):: uB_tilda, kB_tilda, eB_tilda
+         real(dp) :: uB_coeff(0:12), kB_coeff(0:12), eB_coeff(0:12)
+         real(dp) :: A_max, A_min, logA
 
-         data a_coeff / &
-               -0.044392,-0.2024458,-0.50495295,-0.86858972,-0.2781712,&
-               1.93787186,1.41369458,-2.85725104,-1.58044849,2.47665911,&
-               0.43025852,-0.92325736, 0.16332385  /
+         data uB_coeff / &
+               0.16332385d0, -0.92325736d0,  0.43025852d0,  2.47665911d0, -1.58044849d0, -2.85725104d0, &
+               1.41369458d0,  1.93787186d0, -0.2781712d0,  -0.86858972d0, -0.50495295d0, -0.2024458d0, &
+               -0.044392d0  /
 
-         data b_coeff / &
-               0.0135241,0.06572427,0.17654007,0.45234062,0.83321596,&
-               0.03682934,-2.03805955,-0.97659755,2.56699548,1.1755226,&
-               -1.75581928,-0.45128656,0.51279656 /
+   
+         data kB_coeff / &
+               0.51279656d0, -0.45128656d0, -1.75581928d0, 1.1755226d0, 2.56699548d0, -0.97659755d0, &
+               -2.03805955d0, 0.03682934d0, 0.83321596d0, 0.45234062d0, 0.17654007d0, 0.06572427d0, &
+               0.0135241d0 /
 
-         if (A<0.1222) then
-            uB_tilda = 1
-            kB_tilda = 1
-         elseif (A>=0.1222 .and. A<=14.61) then
-            uB_tilda = power_series(a_coeff,log10(A))
+
+         data eB_coeff / &
+               0.59612214d0, -0.5259545d0, -2.05943751d0, 1.34350722d0, 3.08785848d0, -1.03236181d0, &
+               -2.55051211d0, -0.17526711d0,  1.05975301d0, 0.81448762d0, 0.44832736d0, 0.19021108d0, &
+               0.04120569d0 /
+
+
+         uB_tilda = 1.d0
+         kB_tilda = 1.d0
+         eB_tilda = 1.d0
+
+         logA = log10(A)
+
+         A_min = 0.12228215861581715d0
+         A_max = 14.608708876567624d0
+
+         if (A>=A_min .and. A<=A_max) then
+            uB_tilda = power_series(uB_coeff,logA)
             uB_tilda  = 10**(uB_tilda)
 
-            kB_tilda = power_series(b_coeff,log10(A))
+            kB_tilda = power_series(kB_coeff,logA)
             kB_tilda = 10**(kB_tilda)
-         elseif(A>14.61)then
-            uB_tilda = 0.1624-1.000321*log10(A)
-            uB_tilda = 10**(uB_tilda)
+         elseif(A>A_max)then
+            ! uB_tilda = 0.1624-1.000321*logA
+            ! uB_tilda = 10**(uB_tilda)
 
-            kB_tilda = -0.3885+ 0.99744* log10(A)
-            kB_tilda = 10**(kB_tilda)
+            ! kB_tilda = -0.3885+ 0.99744* logA
+            ! kB_tilda = 10**(kB_tilda)
+            uB_tilda = exp(0.3740318976227641d0) * A**(-1.0003210331452213d0)
+
+            kB_tilda = exp(-0.8946001752309051d0) * A**(0.9974494585937763d0)
          endif
-      end subroutine
+
+         A_min = 0.10156236866058523d0
+         A_max = 14.480987830804617d0
+
+         if (A>=A_min .and. A<=A_max) then
+            eB_tilda = power_series(eB_coeff,logA)
+            eB_tilda  = 10**(eB_tilda)
+         elseif(A>A_max)then
+            eB_tilda = exp(-1.7555706747837518d0) * A**(1.9934427513511537d0)
+         endif
+      end subroutine magnetic_MLT
 
       real(dp) function power_series(y,x)
          real(dp), intent(in) :: y(0:12), x
          real(dp) :: sum
          integer  :: i
+        
          sum = y(0)
          do i = 1, 12
-            sum = sum + (y(i)*(x**i))
+            sum = sum * x + y(i)
          end do
          power_series = sum
 
-      end function
+         ! coeff[0]*x**(12) + coeff[1]*x**(11) + ... + coeff[11]*x + coeff[12]
+      end function power_series
    end subroutine modify_MLT_vars 
 end module turb_support
