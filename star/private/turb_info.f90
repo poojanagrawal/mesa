@@ -244,6 +244,8 @@
          end if
          
          s% xtra1_array(k) = mlt_vc_ad% val
+         s% xtra2_array(k) = Y_face_ad% val
+
          k_tilda = 1.d0 
          if (trim(s% x_character_ctrl(1))/='') then
             call modify_MLT_vars(s, k,  &
@@ -251,7 +253,6 @@
             scale_height_ad, mixing_length_alpha, &
             mixing_type, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, Gamma_ad, k_tilda, ierr)
          endif
-         s% xtra2_array(k) = mlt_vc_ad% val
 
          call store_results
 
