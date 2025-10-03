@@ -501,9 +501,7 @@ contains
                Gamma = Cp*opacity*pow2(rho)*conv_vel*Lambda/(6*crad*clight*pow3(T))
             endif
          endif
-         s% xtra3_array(k) = u_tilda
-         s% xtra4_array(k) = k_tilda
-         s% xtra5_array(k) = e_tilda
+
       contains 
 
       subroutine rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr1)

@@ -245,7 +245,10 @@
          
          s% xtra1_array(k) = mlt_vc_ad% val
          s% xtra2_array(k) = Y_face_ad% val
-
+         s% xtra3_array(k) = 1.d0
+         s% xtra4_array(k) = 1.d0
+         s% xtra5_array(k) = 1.d0
+         s% xtra6_array(k) = 1.d0
          k_tilda = 1.d0 
          if (trim(s% x_character_ctrl(1))/='') then
             call modify_MLT_vars(s, k,  &
