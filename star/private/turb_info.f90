@@ -257,10 +257,9 @@
             mixing_type, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, Gamma_ad, k_tilda, ierr)
          endif
 
-         call store_results
+         scale_height_ad = scale_height_ad/k_tilda
 
-         s% Lambda_ad(k) = s% Lambda_ad(k)/k_tilda
-         s% mlt_mixing_length(k) = s% Lambda_ad(k)%val/k_tilda 
+         call store_results
 
          if (s% mlt_gradT_fraction >= 0d0 .and. s% mlt_gradT_fraction <= 1d0) then
             f = s% mlt_gradT_fraction
