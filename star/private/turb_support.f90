@@ -479,6 +479,11 @@ contains
                   A = 1.d0
                   call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
                   s% xtra6_array(k) = A
+            elseif(trim(s% x_character_ctrl(1))=='magnetic_st') then
+                  ! use B from spruit taylor dynamo
+                  A = s% dynamo_B_r(k)/conv_vel% val*sqrt(s% rho(k))   !
+                  call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
+                  s% xtra6_array(k) = A
             end if
             if (abs(k_tilda-1.d0)>tiny) then
                ! conv vel from mod MLT

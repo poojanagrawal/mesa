@@ -255,9 +255,13 @@
             gradL_composition_term,grada_face_ad,  &
             scale_height_ad, mixing_length_alpha, &
             mixing_type, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, Gamma_ad, k_tilda, ierr)
-         endif
 
-         scale_height_ad = scale_height_ad/k_tilda
+            ! scale_height_ad = scale_height_ad/k_tilda
+
+            s% alpha_mlt(k) = s% alpha_mlt(k)/k_tilda
+            mixing_length_alpha = s% alpha_mlt(k)
+
+         endif
 
          call store_results
 
