@@ -37,7 +37,12 @@ use turb
 implicit none
 
 private
-public :: get_gradT, do1_mlt_eval, Get_results,modify_MLT_vars
+public :: get_gradT, do1_mlt_eval, Get_results,modify_MLT_vars, read_data_for_RMMLT
+
+integer, parameter :: N = 81926  !274*299 
+
+real(dp), dimension(N), target :: rossby_grid, alfven_grid, vitesse_tilde_grid, k_tilde_grid, eps_tilde_grid
+
 
 contains
 
@@ -427,7 +432,7 @@ contains
    subroutine modify_MLT_vars(s, k,  &
         gradL_composition_term, grada,  &
           scale_height, mixing_length_alpha, &
-         mixing_type, gradT, Y_face, conv_vel, D, Gamma, k_tilda, ierr)
+         mixing_type, gradT, Y_face, conv_vel, D, Gamma, ierr)
 
       use star_utils
       type (star_info), pointer :: s
@@ -443,72 +448,97 @@ contains
       real(dp):: R0, A, u_tilda, k_tilda, e_tilda
       real(dp):: tiny = 1d-12
       include 'formats'
-         u_tilda = 1.d0
-         k_tilda = 1.d0
-         e_tilda = 1.d0
-         ! Check for convective mixing
-         if ((mixing_type == convective_mixing) .and.(conv_vel% val > tiny)) then
-            Lambda = mixing_length_alpha*scale_height
-            if (trim(s% x_character_ctrl(1))=='rotation') then
-               ! use modifications to mlt for rotation
-               ! check for rotation first
-               if (s% rotation_flag .and. (s% omega(k) > tiny)) then
-                  ! Convective rossby number 
-                  R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)                     
-                  if (R0>tiny) call rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr)   
-                  if (ierr /= 0) then 
-                     print *, "Newton's method gave unphysical root", R0, conv_vel% val, s% omega(k),k
-                     return
-                  endif
-                  s% xtra6_array(k) = R0 
-               endif
-            elseif (trim(s% x_character_ctrl(1))=='magnetic_iso') then
-                  if (s% rotation_flag .and. (s% omega(k) > tiny)) then
-                     ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
-                     ! modifications to mlt for B field when B is given by magnetostrophy (Astoul et al. 2019)
-                     ! A is the inverse alfven number
 
-                     A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
-                     call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
-                     s% xtra6_array(k) = A
-                  endif
-             elseif (trim(s% x_character_ctrl(1))=='magnetic_eqp') then
+      ierr = 0
+      ! Check for convective mixing
+      if ((mixing_type /= convective_mixing).or.(conv_vel% val <= tiny)) return
+
+      u_tilda = 1.d0
+      k_tilda = 1.d0
+      e_tilda = 1.d0
+      R0 = 0.d0
+      A = 0.d0
+      Lambda = mixing_length_alpha*scale_height
+
+      ! R0 is the convective rossby number
+      ! check for rotation first
+      if (s% rotation_flag .and. (s% omega(k) > tiny)) R0 = conv_vel% val / (2* s% omega(k)*Lambda% val)
+
+      ! A is the inverse alfven number 
+      if ((trim(s% x_character_ctrl(1))=='magnetic') .or. (trim(s% x_character_ctrl(1))=='magnetorotational')) then
+            select case (trim(s% x_character_ctrl(2)))
+               case('magnetostrophy') 
+                  ! magnetostrophy: lorentz force balances Coriolis; gives maximum B
+                  ! modifications to mlt for B field when B is given by magnetostrophy (Astoul et al. 2019)
+                  A = sqrt((2* s% omega(k)*Lambda% val)/conv_vel% val)
+               case('equipartition') 
                   ! Equipartition: lorentz force balances KE of the fluid; gives minimum B
                   ! modifications to mlt for B field when B is given by Equipartition
-                  ! A is the inverse alfven number 
                   A = 1.d0
-                  call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
-                  s% xtra6_array(k) = A
-            elseif(trim(s% x_character_ctrl(1))=='magnetic_st') then
+               case('spruit_taylor') 
                   ! use B from spruit taylor dynamo
-                  A = s% dynamo_B_r(k)/conv_vel% val*sqrt(s% rho(k))   !
-                  call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
-                  s% xtra6_array(k) = A
-            end if
-            if (abs(k_tilda-1.d0)>tiny) then
-               ! conv vel from mod MLT
-               conv_vel% val = conv_vel% val * u_tilda
-               Lambda% val = Lambda% val/k_tilda
-               D = conv_vel*Lambda/3d0    ! diffusion coefficient [cm^2/sec]
-               !! @param Y_face The superadiabaticity (dlnT/dlnP - grada, output).
-               Y_face = Y_face * e_tilda
-               if (s% use_Ledoux_criterion) then
-                  gradL = grada + gradL_composition_term ! Ledoux temperature gradient
+                  A = s% dynamo_B_r(k)/conv_vel% val*sqrt(s% rho(k))   
+               case default
+                  print*, 'invalid option for magnetic field'
+                  ierr = 1
+                  return
+            end select
+      endif
+      
+      select case (trim(s% x_character_ctrl(1)))
+         case('rotation')
+            if (R0>tiny) call rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr)   
+         case('magnetic')
+            if (A> tiny) call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
+         case ('magnetorotational') 
+            ! Amax = 2.372169276064804 
+            ! Amin = -5.690105612981479  
+            ! R0_max = 3.1929557402873447 
+            ! R0_min = -6.035328219535549 
+            if ((R0>tiny) .and. (R0< 1d3))then
+               if (A> 1d-6) then
+                  call magnetorotational_MLT(R0, A, u_tilda, k_tilda,e_tilda) 
                else
-                  gradL = grada
-               end if
-               gradT = Y_face + gradL
-               !  convective efficiency, Gamma from C&G 14.39
-               T = get_T_face(s,k)
-               opacity = get_kap_face(s,k)
-               rho = get_Rho_face(s,k)
-               Cp = get_Cp_face(s,k)
-               Gamma = Cp*opacity*pow2(rho)*conv_vel*Lambda/(6*crad*clight*pow3(T))
+                  ! magnetic field is too small
+                  call rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr)  
+               endif
+            else
+               ! R0<tiny or rotation is too small
+               if (A> tiny) call magnetic_MLT(A, u_tilda, k_tilda,e_tilda)
             endif
-         endif
-         s% xtra3_array(k) = u_tilda
-         s% xtra4_array(k) = k_tilda
-         s% xtra5_array(k) = e_tilda
+      end select
+
+      if (ierr /= 0) then 
+         print *, "Newton's method gave unphysical root", R0, conv_vel% val, s% omega(k),k
+         return
+      endif
+
+      if (abs(k_tilda-1.d0)>tiny) then
+         ! conv vel from mod MLT
+         conv_vel% val = conv_vel% val * u_tilda
+         Lambda% val = Lambda% val/k_tilda
+         D = conv_vel*Lambda/3d0    ! diffusion coefficient [cm^2/sec]
+         !! @param Y_face The superadiabaticity (dlnT/dlnP - grada, output).
+         Y_face = Y_face * e_tilda
+         if (s% use_Ledoux_criterion) then
+            gradL = grada + gradL_composition_term ! Ledoux temperature gradient
+         else
+            gradL = grada
+         end if
+         gradT = Y_face + gradL
+         !  convective efficiency, Gamma from C&G 14.39
+         T = get_T_face(s,k)
+         opacity = get_kap_face(s,k)
+         rho = get_Rho_face(s,k)
+         Cp = get_Cp_face(s,k)
+         Gamma = Cp*opacity*pow2(rho)*conv_vel*Lambda/(6*crad*clight*pow3(T))
+      endif
+      
+      s% xtra3_array(k) = u_tilda
+      s% xtra4_array(k) = k_tilda
+      s% xtra5_array(k) = e_tilda
+      s% xtra2_array(k) = A
+      s% xtra6_array(k) = R0
       contains 
 
       subroutine rotating_MLT(R0, u_tilda, k_tilda, e_tilda,ierr1)
@@ -600,13 +630,7 @@ contains
             kB_tilda = power_series(kB_coeff,logA)
             kB_tilda = 10**(kB_tilda)
          elseif(A>A_max)then
-            ! uB_tilda = 0.1624-1.000321*logA
-            ! uB_tilda = 10**(uB_tilda)
-
-            ! kB_tilda = -0.3885+ 0.99744* logA
-            ! kB_tilda = 10**(kB_tilda)
             uB_tilda = exp(0.3740318976227641d0) * A**(-1.0003210331452213d0)
-
             kB_tilda = exp(-0.8946001752309051d0) * A**(0.9974494585937763d0)
          endif
 
@@ -634,5 +658,141 @@ contains
 
          ! coeff[0]*x**(12) + coeff[1]*x**(11) + ... + coeff[11]*x + coeff[12]
       end function power_series
-   end subroutine modify_MLT_vars 
+
+      subroutine magnetorotational_MLT(R0, A, u_tilda, k_tilda,e_tilda)
+
+         real(dp),intent(in) :: R0, A
+         real(dp), intent(out) :: u_tilda, k_tilda, e_tilda
+
+         integer :: i
+         real(dp) :: val(3)
+         real(dp), pointer:: F(:), X(:), Y(:)
+
+         !Rossby_grid
+         call get_grid_ptr(4,X)
+         ! Alfven_grid
+         call get_grid_ptr(5,Y)
+
+         do i = 1,3
+            call get_grid_ptr(i,F)
+            val(i) = iwd_radius(X,Y, F,log10(R0),log10(A))
+            nullify(F)
+         end do
+
+         u_tilda = 10**val(1)
+         k_tilda = 10**val(2)
+         e_tilda = 10**val(3)
+         nullify(X,Y)
+
+      end subroutine magnetorotational_MLT
+
+      function iwd_radius(x, y, f, x_val, y_val) result(f_val)
+         real(dp), intent(in) :: x(:), y(:), f(:)
+         real(dp), intent(in) :: x_val, y_val
+         real(dp) :: f_val
+
+         integer :: n, i, j, k, min_index
+         real(dp) :: d2, w, dx, dy, total_w, weighted_sum
+         real(dp) :: power, radius2, eps2, min_d
+
+         power = 3
+         radius2 = 0.01d0
+         eps2 = 1d-6
+
+         min_d = huge(0.0d0)    !largest float
+         min_index = 0
+         n  = size(x)
+         f_val = 0.0d0
+         total_w = 0.0d0
+         weighted_sum = 0.0d0
+         do k = 1, n
+            dx = x(k) - x_val
+            dy = y(k) - y_val
+            d2 = dx**2 + dy**2
+            if (d2 <= radius2) then
+               ! distance is too small
+               if (d2 < eps2) then
+                  f_val = f(k)
+                  return
+               endif
+               w = 1.0d0 / (sqrt(d2)**power)
+               weighted_sum = weighted_sum + w * f(k)
+               total_w = total_w + w
+            elseif (d2<min_d) then
+               min_d = d2
+               min_index = k
+            end if
+         end do
+         if (total_w > 0) then
+            f_val = weighted_sum / total_w
+         else
+            f_val = f(min_index)
+         endif
+         
+      end function iwd_radius
+
+      end subroutine modify_MLT_vars 
+
+subroutine get_grid_ptr(i,grid_ptr)
+      integer, intent(in):: i
+         real(dp), dimension(:), pointer :: grid_ptr
+
+          select case(i)
+               case(1)
+                grid_ptr => vitesse_tilde_grid
+               case(2)
+                grid_ptr => k_tilde_grid
+               case(3)
+                grid_ptr => eps_tilde_grid
+               case(4)
+                grid_ptr => rossby_grid   
+               case(5)
+                grid_ptr => alfven_grid   
+            end select
+      end subroutine get_grid_ptr
+
+      subroutine read_data_for_RMMLT(ierr)
+         use const_def, only: mesa_data_dir
+
+         character (len=256) :: filename
+         integer, intent(out) :: ierr
+         integer :: iounit
+
+         filename  = trim(mesa_data_dir)//'/MLT_data/rossby_grid.bin'
+         iounit = alloc_iounit(ierr); if (ierr /= 0) return
+         open(unit=iounit, file=trim(filename), status='old', access='stream', form='unformatted')
+         read(iounit) rossby_grid
+         close(iounit)
+         call free_iounit(iounit)
+
+         filename  = trim(mesa_data_dir)//'/MLT_data/alfven_grid.bin'
+         iounit = alloc_iounit(ierr); if (ierr /= 0) return
+         open(unit=iounit, file=trim(filename), status='old', access='stream', form='unformatted')
+         read(iounit) alfven_grid
+         close(iounit)
+         call free_iounit(iounit)
+
+         filename  = trim(mesa_data_dir)//'/MLT_data/vitesse_tilde_grid.bin'
+         iounit = alloc_iounit(ierr); if (ierr /= 0) return
+         open(unit=iounit, file=trim(filename), status='old', access='stream', form='unformatted')
+         read(iounit) vitesse_tilde_grid
+         close(iounit)
+         call free_iounit(iounit)
+
+         filename  = trim(mesa_data_dir)//'/MLT_data/k_tilde_grid.bin'
+         iounit = alloc_iounit(ierr); if (ierr /= 0) return
+         open(unit=iounit, file=trim(filename), status='old', access='stream', form='unformatted')
+         read(iounit) k_tilde_grid
+         close(iounit)
+         call free_iounit(iounit)
+
+         filename  = trim(mesa_data_dir)//'/MLT_data/eps_tilde_grid.bin'
+         iounit = alloc_iounit(ierr); if (ierr /= 0) return
+         open(unit=iounit, file=trim(filename), status='old', access='stream', form='unformatted')
+         read(iounit) eps_tilde_grid
+         close(iounit)
+         call free_iounit(iounit)
+
+      end subroutine read_data_for_RMMLT
+  
 end module turb_support

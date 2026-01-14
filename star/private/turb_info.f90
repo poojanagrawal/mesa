@@ -42,12 +42,13 @@
          check_for_redo_MLT, & ! for hydro_vars
          set_gradT_excess_alpha ! for evolve
 
-
       contains
 
 
       subroutine set_mlt_vars(s, nzlo, nzhi, ierr)
          use star_utils, only: start_time, update_time
+         use turb_support, only: read_data_for_RMMLT
+
          type (star_info), pointer :: s
          integer, intent(in) :: nzlo, nzhi
          integer, intent(out) :: ierr
@@ -58,6 +59,15 @@
          include 'formats'
          ierr = 0
          if (s% doing_timing) call start_time(s, time0, total)
+
+         if ((s% phase_of_evolution >= phase_ZAMS) .and. (trim(s% x_character_ctrl(1))=='magnetorotational')) then
+            call read_data_for_RMMLT(ierr)
+            if (ierr/=0) then
+            print*, 'error reading data files for RM-MLT'
+            return
+            endif
+         endif
+
 !$OMP PARALLEL DO PRIVATE(k,op_err,make_gradr_sticky_in_solver_iters) SCHEDULE(dynamic,2)
          do k = nzlo, nzhi
             op_err = 0
@@ -98,7 +108,7 @@
          real(dp), pointer :: vel(:)
          integer :: i, mixing_type, h1, nz, k_T_max
          real(dp), parameter :: conv_vel_mach_limit = 0.9d0
-         real(dp) :: crystal_pad, k_tilda
+         real(dp) :: crystal_pad
          logical :: no_mix
          type(auto_diff_real_star_order1) :: &
             grada_face_ad, scale_height_ad, gradr_ad, rho_face_ad, &
@@ -244,21 +254,18 @@
          end if
          
          s% xtra1_array(k) = mlt_vc_ad% val
-         s% xtra2_array(k) = Y_face_ad% val
+         s% xtra2_array(k) = 0.d0
          s% xtra3_array(k) = 1.d0
          s% xtra4_array(k) = 1.d0
          s% xtra5_array(k) = 1.d0
-         s% xtra6_array(k) = 1.d0
-         k_tilda = 1.d0 
-         if (trim(s% x_character_ctrl(1))/='') then
+         s% xtra6_array(k) = 0.d0
+         if ((s% phase_of_evolution >= phase_ZAMS) .and. (trim(s% x_character_ctrl(1))/='')) then
             call modify_MLT_vars(s, k,  &
             gradL_composition_term,grada_face_ad,  &
             scale_height_ad, mixing_length_alpha, &
-            mixing_type, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, Gamma_ad, k_tilda, ierr)
+            mixing_type, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, Gamma_ad, ierr)
 
-            ! scale_height_ad = scale_height_ad/k_tilda
-
-            s% alpha_mlt(k) = s% alpha_mlt(k)/k_tilda
+            s% alpha_mlt(k) = s% alpha_mlt(k)/s% xtra4_array(k) 
             mixing_length_alpha = s% alpha_mlt(k)
 
          endif
@@ -632,8 +639,6 @@
             call do1_mlt_2(s, k, make_gradr_sticky_in_solver_iters, ierr, &
                mixing_length_alpha_in = dr/s% scale_height(k))
          end subroutine redo1_mlt
-
       end subroutine check_for_redo_MLT
-
 
       end module turb_info
