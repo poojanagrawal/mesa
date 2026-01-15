@@ -444,9 +444,8 @@ contains
       type(auto_diff_real_star_order1) :: Lambda, gradL, opacity, rho, Cp, T
       integer, intent(out) :: ierr
       
-      logical, parameter :: report = .false.
-      real(dp):: R0, A, u_tilda, k_tilda, e_tilda
-      real(dp):: tiny = 1d-12
+      real(dp):: R0, A, u_tilda, k_tilda, e_tilda, B2
+      real(dp), parameter :: tiny = 1d-12
       include 'formats'
 
       ierr = 0
@@ -477,7 +476,8 @@ contains
                   A = 1.d0
                case('spruit_taylor') 
                   ! use B from spruit taylor dynamo
-                  A = s% dynamo_B_r(k)/conv_vel% val*sqrt(s% rho(k))   
+                  B2 = s% dynamo_B_r(k)* s% dynamo_B_r(k)+s% dynamo_B_phi(k)*s% dynamo_B_phi(k)
+                  A = sqrt(B2/conv_vel% val*conv_vel% val*s% rho(k))   
                case default
                   print*, 'invalid option for magnetic field'
                   ierr = 1
