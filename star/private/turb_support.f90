@@ -42,6 +42,7 @@ public :: get_gradT, do1_mlt_eval, Get_results,modify_MLT_vars, read_data_for_RM
 integer, parameter :: N = 81926  !274*299 
 
 real(dp), dimension(N), target :: rossby_grid, alfven_grid, vitesse_tilde_grid, k_tilde_grid, eps_tilde_grid
+real(dp), parameter ::  cos2_theta = 1.d0!/3.d0
 
 
 contains
@@ -552,15 +553,14 @@ contains
          var_s = 0.5707277056455107       !s = 2**(1/3)* 3**(1/2) * 5**(-5/6)
          c0 = pow2(5*pi*R0)
          c = c0*pow2(var_s) 
-         z0 = 1.357208808297453     !(2/5)**(-1/3)
-
+         z0 = 1.357208808297453     !(2/5)**(-1/3) 
          ! Call Newton's method
          z = newton_for_rot(c, z0)
          if (z>0.d0) then
             sqrt_z = sqrt(z)
             u_tilda = 2.041241452319315* var_s/sqrt_z
             k_tilda = 0.6324555320336759*(sqrt_z**3) 
-            e_tilda = (c*(z**5)+6)/(c0*(pow3(z)-1))
+            e_tilda = (c*(z**5)+6*cos2_theta)/(c0*(pow3(z)-1))
             ierr1 = 0
          endif
         
@@ -578,7 +578,7 @@ contains
          z = initial_guess
          do i = 1, max_iter
             ! Eq. 46 from Augustson & Mathis (2019)
-            f = 2.0d0*z**5 - 5.0d0*z**2 - (18/c)
+            f = 2.0d0*z**5 - 5.0d0*z**2 - (18*cos2_theta/c)
             f_prime = 10.0d0*z**4 - 10.0d0*z
             z_new = z - f / f_prime
             if (abs(z_new - z) < tol) then

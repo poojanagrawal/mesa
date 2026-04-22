@@ -265,7 +265,7 @@
             scale_height_ad, mixing_length_alpha, &
             mixing_type, gradT_ad, Y_face_ad, mlt_vc_ad, D_ad, Gamma_ad, ierr)
 
-            s% alpha_mlt(k) = s% alpha_mlt(k)/s% xtra4_array(k) 
+            s% alpha_mlt(k) = s% mixing_length_alpha/s% xtra4_array(k) 
             mixing_length_alpha = s% alpha_mlt(k)
 
          endif
